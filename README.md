@@ -45,11 +45,11 @@ The goal of this project is to provide a plug-and-play Raspberry Pi WordPress se
 
 PiPress can be deployed in two ways:
 
-1. **Manual Script-Based Deployment**
-   - Use the `launch.sh` script to install dependencies, configure the access point, and launch WordPress manually.
+1. Manual Script-Based Deployment
+   - Use the `launch.sh` script to install dependencies, configure the access point, and launch WordPress and the monitoring service.
    - This option gives full control over system-level setup and is useful for debugging or custom configurations.
 
-2. **Docker-Based Deployment**
+2. Docker-Based Deployment
    - Use the included `docker-compose.yml` file to spin up WordPress, MariaDB, and the monitoring server in isolated containers.
    - Simplifies installation and keeps services contained.
    - Run with: `docker-compose up -d`
@@ -62,9 +62,11 @@ graph TD
         A[launch.sh] --> B[Install Dependencies]
         B --> C[Configure Access Point]
         C --> D[iptables Redirect to WordPress]
-        D --> E[WordPress Server]
-        E -->|Serve HTTP| G[Client Device]
-        F[Flask Monitoring Server] -->|Serve Metrics & Controls| H[Admin Browser]
+        D --> E[Apache + WordPress Server]
+        A --> F[Start Flask Monitor]
+        E -->|Serve HTTP| G[Client Browser]
+        F -->|Serve Dashboard| H[Admin Browser]
+        H -->|Control Signals| E
     end
 ```
 
