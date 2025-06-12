@@ -41,13 +41,40 @@ The goal of this project is to provide a plug-and-play Raspberry Pi WordPress se
    - Allows remote starting, stopping, or restarting the WordPress (Apache) service
    - View terminal error messages and health of the server in real time
 
+## Deployment
+
+PiPress can be deployed in two ways:
+
+1. **Manual Script-Based Deployment**
+   - Use the `launch.sh` script to install dependencies, configure the access point, and launch WordPress manually.
+   - This option gives full control over system-level setup and is useful for debugging or custom configurations.
+
+2. **Docker-Based Deployment**
+   - Use the included `docker-compose.yml` file to spin up WordPress, MariaDB, and the monitoring server in isolated containers.
+   - Simplifies installation and keeps services contained.
+   - Run with: `docker-compose up -d`
+
+## Mermaid Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph Raspberry Pi
+        A[launch.sh] --> B[Install Dependencies]
+        B --> C[Configure Access Point]
+        C --> D[iptables Redirect to WordPress]
+        D --> E[WordPress Server]
+        E -->|Serve HTTP| G[Client Device]
+        F[Flask Monitoring Server] -->|Serve Metrics & Controls| H[Admin Browser]
+    end
+```
+
 ## Planned Features
 
-- [ ] launch.sh: One-click setup and launch script
-- [ ] Modular components: separate scripts for dependency check, AP config, WordPress install, redirect setup
-- [ ] Captive portal with customizable landing page
-- [ ] Support for both LAMP and Docker WordPress deployments
-- [ ] Flask-based monitoring dashboard
+- [x] launch.sh: One-click setup and launch script
+- [x] Modular components: separate scripts for dependency check, AP config, WordPress install, redirect setup
+- [x] Captive portal with customizable landing page
+- [x] Support for both LAMP and Docker WordPress deployments
+- [x] Flask-based monitoring dashboard
 - [ ] Optional settings via config file
 
 ## Dependencies
@@ -63,6 +90,7 @@ The goal of this project is to provide a plug-and-play Raspberry Pi WordPress se
 PiPress/
 ├── README.md
 ├── launch.sh
+├── docker-compose.yml
 ├── tools/
 │   ├── install_dependencies.sh
 │   ├── configure_ap.sh
