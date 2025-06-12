@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  wordpress:
+    image: wordpress:latest
+    container_name: pipress_wordpress
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpresspass
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wordpress_data:/var/www/html
+
+  db:
+    image: mariadb:latest
+    container_name: pipress_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpresspass
+    volumes:
+      - db_data:/var/lib/mysql
+
+  monitor:
+    build: ./monitor
+    container_name: pipress_monitor
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - wordpress
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - FLASK_ENV=production
+
+volumes:
+  wordpress_data:
+  db_data:
