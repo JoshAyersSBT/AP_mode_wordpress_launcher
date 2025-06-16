@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PiPress Monitor</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .status-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0px 0px 10px #ccc;
+        }
+        .log {
+            background: #222;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .controls button {
+            margin-right: 10px;
+            padding: 10px 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PiPress System Monitor</h1>
+
+    <div class="status-box">
+        <h2>System Status</h2>
+        <p><strong>CPU Load:</strong> {{ status.cpu_load }}</p>
+        <p><strong>RAM Usage:</strong> {{ status.ram_usage }}</p>
+        <p><strong>Apache Status:</strong> {{ status.apache_status }}</p>
+    </div>
+
+    <div class="status-box">
+        <h2>Apache Control</h2>
+        <div class="controls">
+            <a href="/control/start"><button>Start</button></a>
+            <a href="/control/stop"><button>Stop</button></a>
+            <a href="/control/restart"><button>Restart</button></a>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <h2>Recent Logs</h2>
+        <div class="log">
+            <pre>{{ status.logs }}</pre>
+        </div>
+    </div>
+</body>
+</html>
