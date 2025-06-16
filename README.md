@@ -72,11 +72,11 @@ graph TD
 
 ## Planned Features
 
-- [] launch.sh: One-click setup and launch script
-- [] Modular components: separate scripts for dependency check, AP config, WordPress install, redirect setup
-- [] Captive portal with customizable landing page
-- [] Support for both LAMP and Docker WordPress deployments
-- [] Flask-based monitoring dashboard
+- [ ] launch.sh: One-click setup and launch script
+- [ ] Modular components: separate scripts for dependency check, AP config, WordPress install, redirect setup
+- [ ] Captive portal with customizable landing page
+- [ ] Support for both LAMP and Docker WordPress deployments
+- [ ] Flask-based monitoring dashboard
 - [ ] Optional settings via config file
 
 ## Dependencies
