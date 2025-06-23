@@ -1,0 +1,25 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f0f0f0;
+}
+header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.lesson-list {
+  list-style: none;
+  padding: 0;
+}
+.lesson-list li {
+  margin: 10px 0;
+}
+.lesson-list a {
+  text-decoration: none;
+  color: #2c3e50;
+  font-size: 1.2em;
+}
+.lesson-list a:hover {
+  color: #2980b9;
+}
