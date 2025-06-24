@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# PiPress Launch Script
-# Supports AP mode (default), local mode (-local), and fast launch (-f/--fastLaunch)
-# Uses ./www/captive-portal/ as the Apache web root
+# PiPress Launch Script (Absolute Webroot Enforced)
+# Serves ./www/captive-portal directly using full Apache reconfiguration
+# Supports: -local for LAN mode and -f / --fastLaunch to skip dependency checks
 
 set -e
 
@@ -11,7 +11,7 @@ FAST_LAUNCH=false
 
 for arg in "$@"; do
     case $arg in
-        -local)
+        -l|--local)
             USE_LOCAL=true
             echo "📡 Local network hosting enabled."
             ;;
@@ -21,6 +21,15 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+PROJECT_DIR="$(cd "$(dirname "$0")"; pwd)"
+WEB_ROOT="$PROJECT_DIR/www/captive-portal"
+
+
+if [ ! -d "$WEB_ROOT" ]; then
+    echo "❌ ERROR: Web root directory not found at: $WEB_ROOT"
+    exit 1
+fi
 
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
@@ -45,8 +54,8 @@ fi
 
 if [ "$USE_LOCAL" = false ]; then
     echo "Stopping hostapd and dnsmasq..."
-    sudo systemctl stop hostapd || echo "hostapd was not running"
-    sudo systemctl stop dnsmasq || echo "dnsmasq was not running"
+    sudo systemctl stop hostapd || true
+    sudo systemctl stop dnsmasq || true
 
     echo "Enabling IP forwarding..."
     sudo sysctl -w net.ipv4.ip_forward=1
@@ -69,13 +78,13 @@ EOF
     sudo sed -i 's|#DAEMON_CONF=""|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
 
     echo "Starting AP services..."
-    sudo systemctl start dnsmasq
     sudo systemctl unmask hostapd
     sudo systemctl enable hostapd
     sudo systemctl start hostapd
+    sudo systemctl start dnsmasq
 fi
 
-# Get dynamic IP assigned to active interface
+# Get dynamic IP
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
@@ -88,51 +97,43 @@ if [ -z "$AP_IP" ]; then
 fi
 echo "✅ Detected IP: $AP_IP"
 
-# Configure Apache to use the local captive-portal directory
-WEB_ROOT="$(pwd)/www/captive-portal"
-if [ ! -d "$WEB_ROOT" ]; then
-    echo "❌ Web root directory $WEB_ROOT not found!"
-    exit 1
-fi
-
-echo "Setting Apache VirtualHost to $WEB_ROOT..."
-sudo bash -c "cat > /etc/apache2/sites-available/000-default.conf <<EOF
+# Write full Apache config
+echo "🔧 Overwriting Apache config to serve: $WEB_ROOT"
+sudo tee /etc/apache2/sites-available/000-default.conf > /dev/null <<EOF
 <VirtualHost *:80>
+    ServerAdmin webmaster@localhost
     DocumentRoot $WEB_ROOT
     <Directory $WEB_ROOT>
-        Options Indexes FollowSymLinks
+        Options -Indexes +FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
     ErrorLog \${APACHE_LOG_DIR}/error.log
     CustomLog \${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
-EOF"
+EOF
 
-sudo a2ensite 000-default.conf
-sudo systemctl reload apache2
-
-# Permissions
+# Fix ownership and restart Apache
 sudo chown -R www-data:www-data "$WEB_ROOT"
 sudo chmod -R 755 "$WEB_ROOT"
+sudo a2ensite 000-default.conf
+sudo systemctl reload apache2
+sudo systemctl restart apache2
 
-# Configure iptables redirection if in AP-only mode
+# Configure iptables redirect (AP mode only)
 if [ "$USE_LOCAL" = false ]; then
-    echo "Redirecting all HTTP traffic to server at $AP_IP..."
+    echo "Redirecting all HTTP traffic to $AP_IP..."
     sudo iptables -t nat -F
     sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination $AP_IP:80
     sudo iptables -t nat -A POSTROUTING -j MASQUERADE
     sudo sh -c "iptables-save > /etc/iptables.ipv4.nat"
 fi
 
-echo "Launching Apache and captive portal site..."
-sudo systemctl enable apache2
-sudo systemctl restart apache2
-
-echo "Launching monitoring Flask server..."
-cd monitor
+# Start monitor
+echo "Launching Flask monitor..."
+cd "$PROJECT_DIR/monitor"
 nohup python3 app.py > monitor.log 2>&1 &
 
-echo "PiPress setup complete. Access the services using:"
+echo "✅ PiPress setup complete."
 echo "- Web Portal: http://$AP_IP"
 echo "- Monitor:   http://$AP_IP:5000"
