@@ -27,7 +27,7 @@ WEB_ROOT="$PROJECT_DIR/www/captive-portal"
 
 
 if [ ! -d "$WEB_ROOT" ]; then
-    echo "❌ ERROR: Web root directory not found at: $WEB_ROOT"
+    echo " ERROR: Web root directory not found at: $WEB_ROOT"
     exit 1
 fi
 
@@ -57,11 +57,11 @@ if [ "$USE_LOCAL" = false ]; then
     sudo systemctl stop hostapd || true
     sudo systemctl stop dnsmasq || true
 
-    echo "Enabling IP forwarding..."
+    echo "Status: Enabling IP forwarding..."
     sudo sysctl -w net.ipv4.ip_forward=1
     sudo sed -i '/net.ipv4.ip_forward/s/^#//g' /etc/sysctl.conf
 
-    echo "Configuring static IP for wlan0..."
+    echo "Status: Configuring static IP for wlan0..."
     if ! grep -q "interface wlan0" /etc/dhcpcd.conf; then
         cat <<EOF | sudo tee -a /etc/dhcpcd.conf
 interface wlan0
@@ -92,13 +92,13 @@ else
 fi
 
 if [ -z "$AP_IP" ]; then
-    echo "❌ Failed to detect IP address."
+    echo " Failed to detect IP address."
     exit 1
 fi
-echo "✅ Detected IP: $AP_IP"
+echo " Detected IP: $AP_IP"
 
 # Write full Apache config
-echo "🔧 Overwriting Apache config to serve: $WEB_ROOT"
+echo " Overwriting Apache config to serve: $WEB_ROOT"
 sudo tee /etc/apache2/sites-available/000-default.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
@@ -134,6 +134,6 @@ echo "Launching Flask monitor..."
 cd "$PROJECT_DIR/monitor"
 nohup python3 app.py > monitor.log 2>&1 &
 
-echo "✅ PiPress setup complete."
+echo " PiPress setup complete."
 echo "- Web Portal: http://$AP_IP"
 echo "- Monitor:   http://$AP_IP:5000"
