@@ -117,11 +117,11 @@ if [ "$USE_LOCAL" = false ]; then
         else
             echo "⚠️ Virtualenv execution failed, falling back to system Python..."
             deactivate
-            sudo python3 ./monitor/settupAP.py
+            sudo python3 .settupAP.py
         fi
     else
         echo "⚠️ Virtual environment not found. Running with system Python..."
-        sudo python3 ./monitor/settupAP.py
+        sudo python3 .settupAP.py
     fi
 fi
 
