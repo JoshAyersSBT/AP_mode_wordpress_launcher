@@ -39,13 +39,12 @@ USE_LOCAL=$NEW_USE_LOCAL
 FAST_LAUNCH=$NEW_FAST_LAUNCH
 EOF
 
-    echo "✅ Settings updated:"
-    echo "- USE_LOCAL=$NEW_USE_LOCAL"
-    echo "- FAST_LAUNCH=$NEW_FAST_LAUNCH"
-    echo "Re-run the script to apply changes."
-    exit 0
-    ;;
-
+            echo "✅ Settings updated:"
+            echo "- USE_LOCAL=$NEW_USE_LOCAL"
+            echo "- FAST_LAUNCH=$NEW_FAST_LAUNCH"
+            echo "Re-run the script to apply changes."
+            exit 0
+            ;;
     esac
 done
 
@@ -58,25 +57,25 @@ EOF
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
 check_and_install() {
-    local pkg="\$1"
-    PKG_STATUS=\$(dpkg-query -W -f='\${Status}' "\$pkg" 2>/dev/null || true)
-    if [[ "\$PKG_STATUS" != *"install ok installed"* ]]; then
-        echo "Installing \$pkg..."
-        sudo apt-get install -y "\$pkg"
+    local pkg="$1"
+    PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
+    if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
+        echo "Installing $pkg..."
+        sudo apt-get install -y "$pkg"
     else
-        echo "\$pkg is already installed."
+        echo "$pkg is already installed."
     fi
 }
 
-if [ "\$FAST_LAUNCH" = false ]; then
+if [ "$FAST_LAUNCH" = false ]; then
     echo "Checking and installing missing dependencies..."
-    for pkg in "\${DEPENDENCIES[@]}"; do
-        check_and_install "\$pkg"
+    for pkg in "${DEPENDENCIES[@]}"; do
+        check_and_install "$pkg"
     done
     echo "All dependencies are installed."
 fi
 
-if [ "\$USE_LOCAL" = false ]; then
+if [ "$USE_LOCAL" = false ]; then
     echo "Setting up AP-STA mode..."
 
     echo "Stopping hostapd and dnsmasq..."
@@ -124,17 +123,17 @@ EOF2
 fi
 
 # Get active IP
-if [ "\$USE_LOCAL" = true ]; then
-    AP_IP=\$(hostname -I | awk '{print \$1}')
+if [ "$USE_LOCAL" = true ]; then
+    AP_IP=$(hostname -I | awk '{print $1}')
 else
-    AP_IP=\$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 fi
 
-if [ -z "\$AP_IP" ]; then
+if [ -z "$AP_IP" ]; then
     echo "❌ Failed to detect IP address."
     exit 1
 fi
-echo "✅ Detected IP: \$AP_IP"
+echo "✅ Detected IP: $AP_IP"
 
 echo "Launching Apache and WordPress site..."
 sudo systemctl enable apache2
@@ -145,5 +144,5 @@ cd monitor
 nohup python3 app.py > monitor.log 2>&1 &
 
 echo "PiPress setup complete. Access the services using:"
-echo "- Web Portal: http://\$AP_IP"
-echo "- Monitor:   http://\$AP_IP:5000"
+echo "- Web Portal: http://$AP_IP"
+echo "- Monitor:   http://$AP_IP:5000"
