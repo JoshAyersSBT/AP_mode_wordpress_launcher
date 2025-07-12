@@ -3,83 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>PiPress Monitor</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            margin-bottom: 10px;
-        }
-        .status-box {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0px 0px 10px #ccc;
-        }
-        .gauges {
-            display: flex;
-            gap: 40px;
-            justify-content: center;
-            align-items: center;
-            margin-top: 10px;
-        }
-        .gauge {
-            width: 120px;
-            height: 120px;
-        }
-        svg {
-            width: 100%;
-            height: 100%;
-            transform: rotate(-90deg);
-        }
-        .circle-bg {
-            fill: none;
-            stroke: #eee;
-            stroke-width: 3.8;
-        }
-        .circle {
-            fill: none;
-            stroke-width: 3.8;
-            stroke-linecap: round;
-            transition: stroke-dasharray 0.5s ease;
-        }
-        .percentage {
-            font-size: 4px;
-            text-anchor: middle;
-            fill: #333;
-            dominant-baseline: middle;
-            font-weight: bold;
-        }
-        .label {
-            font-size: 2.5px;
-            text-anchor: middle;
-            fill: #666;
-            dominant-baseline: middle;
-        }
-        .log {
-            background: #222;
-            color: #0f0;
-            padding: 10px;
-            font-family: monospace;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .controls button {
-            margin-right: 10px;
-            padding: 10px 15px;
-        }
+    <style href="static/style.css" >
     </style>
 </head>
 <body>
     <h1>PiPress System Monitor</h1>
 
+    <!-- System Status -->
     <div class="status-box">
         <h2>System Status</h2>
         <div class="gauges">
+            <!-- CPU Gauge -->
             <div class="gauge">
                 <svg viewBox="0 0 36 36">
                     <path class="circle-bg"
@@ -98,6 +32,8 @@
                     </g>
                 </svg>
             </div>
+
+            <!-- RAM Gauge -->
             <div class="gauge">
                 <svg viewBox="0 0 36 36">
                     <path class="circle-bg"
@@ -116,6 +52,8 @@
                     </g>
                 </svg>
             </div>
+
+            <!-- TEMP Gauge -->
             <div class="gauge">
                 <svg viewBox="0 0 36 36">
                     <path class="circle-bg"
@@ -135,19 +73,43 @@
                 </svg>
             </div>
         </div>
-        
         <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
     </div>
 
-    <div class="status-box">
-        <h2>Apache Control</h2>
-        <div class="controls">
-            <a href="/control/start"><button>Start</button></a>
-            <a href="/control/stop"><button>Stop</button></a>
-            <a href="/control/restart"><button>Restart</button></a>
+    <!-- Tabbed Settings/Control Box -->
+    <div class="status-box tab-container">
+        <div class="tabs">
+            <button class="tablink active" onclick="openTab(event, 'ApacheTab')">Apache Control</button>
+            <button class="tablink" onclick="openTab(event, 'LauncherTab')">Launcher Settings</button>
+            <button class="tablink" onclick="openTab(event, 'LMSTab')">LMS Settings</button>
+        </div>
+
+        <div id="ApacheTab" class="tab-content active">
+            <div class="controls">
+                <a href="/control/start"><button>Start</button></a>
+                <a href="/control/stop"><button>Stop</button></a>
+                <a href="/control/restart"><button>Restart</button></a>
+            </div>
+        </div>
+
+        <div id="LauncherTab" class="tab-content">
+            <form method="POST" action="/update-settings">
+                <label><input type="checkbox" name="use_local" {% if use_local %}checked{% endif %}> Use Local</label><br>
+                <label><input type="checkbox" name="fast_launch" {% if fast_launch %}checked{% endif %}> Fast Launch</label><br>
+                <button type="submit">Save Settings</button>
+            </form>
+        </div>
+
+        <div id="LMSTab" class="tab-content">
+            <form method="POST" action="/update-lms">
+                <label>LMS Port: <input type="text" name="lms_port" value="{{ lms_port }}"></label><br>
+                <label>LMS Directory: <input type="text" name="lms_dir" value="{{ lms_dir }}"></label><br>
+                <button type="submit">Save LMS Settings</button>
+            </form>
         </div>
     </div>
 
+    <!-- Logs -->
     <div class="status-box">
         <h2>Recent Logs</h2>
         <div class="log">
@@ -176,14 +138,24 @@
 
                 document.getElementById("apache-status").textContent = data.apache_status;
                 document.querySelector(".log-content").textContent = data.logs;
-
             } catch (err) {
                 console.error("Failed to fetch status:", err);
             }
         }
 
-        setInterval(fetchStatus, 100); // Update every .10 seconds
-        fetchStatus(); // Initial load
+        setInterval(fetchStatus, 100); // 0.1s refresh
+        fetchStatus();
+
+        function openTab(evt, tabId) {
+            const tabs = document.querySelectorAll(".tablink");
+            const contents = document.querySelectorAll(".tab-content");
+
+            tabs.forEach(btn => btn.classList.remove("active"));
+            contents.forEach(c => c.classList.remove("active"));
+
+            evt.currentTarget.classList.add("active");
+            document.getElementById(tabId).classList.add("active");
+        }
     </script>
 </body>
 </html>
