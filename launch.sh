@@ -24,17 +24,17 @@ for arg in "$@"; do
             FAST_LAUNCH=true
             echo "⚡ Fast launch: skipping dependency checks."
             ;;
---config)
-    echo "🔧 Opening configuration menu..."
+        --config)
+            echo "🔧 Opening configuration menu..."
 
-    # Load current values or use default fallback
-    CUR_USE_LOCAL=${USE_LOCAL:-false}
-    CUR_FAST_LAUNCH=${FAST_LAUNCH:-false}
+            # Load current values or use default fallback
+            CUR_USE_LOCAL=${USE_LOCAL:-false}
+            CUR_FAST_LAUNCH=${FAST_LAUNCH:-false}
 
-    NEW_USE_LOCAL=$(whiptail --title "PiPress Config" --yesno "Use local LAN hosting?\n\nNo = AP mode (default)" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
-    NEW_FAST_LAUNCH=$(whiptail --title "PiPress Config" --yesno "Enable fast launch?\n\nSkip dependency checks?" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
+            NEW_USE_LOCAL=$(whiptail --title "PiPress Config" --yesno "Use local LAN hosting?\n\nNo = AP mode (default)" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
+            NEW_FAST_LAUNCH=$(whiptail --title "PiPress Config" --yesno "Enable fast launch?\n\nSkip dependency checks?" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
 
-    cat <<EOF > "$CONFIG_FILE"
+            cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$NEW_USE_LOCAL
 FAST_LAUNCH=$NEW_FAST_LAUNCH
 EOF
