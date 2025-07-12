@@ -1,0 +1,219 @@
+.
+├── ./config
+│   ├── ./config/dnsmasq.conf
+│   └── ./config/hostpad.conf
+├── ./docker-compose.yml
+├── ./fileTree.txt
+├── ./launch.sh
+├── ./launch_w_wordpress.sh
+├── ./__MACOSX
+│   └── ./__MACOSX/OnboardLMS-v1.0
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-10
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-11
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-12
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-13
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-14
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-15
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-16
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-4
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-5
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-6
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-7
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-8
+│       ├── ./__MACOSX/OnboardLMS-v1.0/chapter-9
+│       ├── ./__MACOSX/OnboardLMS-v1.0/exploring-the-world-of-robotics
+│       ├── ./__MACOSX/OnboardLMS-v1.0/something-goes-here
+│       ├── ./__MACOSX/OnboardLMS-v1.0/third-chapter
+│       ├── ./__MACOSX/OnboardLMS-v1.0/wp-content
+│       │   ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins
+│       │   │   ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/gutenberg
+│       │   │   │   └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/gutenberg/build
+│       │   │   │       └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/gutenberg/build/block-library
+│       │   │   └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/jetpack
+│       │   │       └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/jetpack/_inc
+│       │   │           ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/jetpack/_inc/blocks
+│       │   │           └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/jetpack/_inc/build
+│       │   │               └── ./__MACOSX/OnboardLMS-v1.0/wp-content/plugins/jetpack/_inc/build/carousel
+│       │   ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes
+│       │   │   └── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox
+│       │   │       └── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox/assets
+│       │   │           ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox/assets/css
+│       │   │           │   └── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox/assets/css/Gotham
+│       │   │           ├── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox/assets/img
+│       │   │           └── ./__MACOSX/OnboardLMS-v1.0/wp-content/themes/beatbox/assets/js
+│       │   └── ./__MACOSX/OnboardLMS-v1.0/wp-content/uploads
+│       │       └── ./__MACOSX/OnboardLMS-v1.0/wp-content/uploads/2025
+│       │           └── ./__MACOSX/OnboardLMS-v1.0/wp-content/uploads/2025/06
+│       └── ./__MACOSX/OnboardLMS-v1.0/wp-includes
+│           └── ./__MACOSX/OnboardLMS-v1.0/wp-includes/js
+│               └── ./__MACOSX/OnboardLMS-v1.0/wp-includes/js/jquery
+├── ./monitor
+│   ├── ./monitor/app.py
+│   ├── ./monitor/monitor.log
+│   ├── ./monitor/templates
+│   │   ├── ./monitor/templates/dashboard.html
+│   │   └── ./monitor/templates/static
+│   │       └── ./monitor/templates/static/style.css
+│   └── ./monitor/utils
+│       ├── ./monitor/utils/__pycache__
+│       │   └── ./monitor/utils/__pycache__/sysinfo.cpython-311.pyc
+│       └── ./monitor/utils/sysinfo.py
+├── ./OnboardLMS
+│   ├── ./OnboardLMS/__MACOSX
+│   │   └── ./OnboardLMS/__MACOSX/OnboardLMS
+│   │       ├── ./OnboardLMS/__MACOSX/OnboardLMS/css
+│   │       ├── ./OnboardLMS/__MACOSX/OnboardLMS/images
+│   │       ├── ./OnboardLMS/__MACOSX/OnboardLMS/js
+│   │       └── ./OnboardLMS/__MACOSX/OnboardLMS/lessons
+│   └── ./OnboardLMS/OnboardLMS
+│       ├── ./OnboardLMS/OnboardLMS/css
+│       │   └── ./OnboardLMS/OnboardLMS/css/style.css
+│       ├── ./OnboardLMS/OnboardLMS/images
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level0.png
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level1.png
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level2.png
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level3.png
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level4.png
+│       │   ├── ./OnboardLMS/OnboardLMS/images/level5.png
+│       │   └── ./OnboardLMS/OnboardLMS/images/solar-energy.png
+│       ├── ./OnboardLMS/OnboardLMS/index.html
+│       ├── ./OnboardLMS/OnboardLMS/js
+│       │   └── ./OnboardLMS/OnboardLMS/js/main.js
+│       └── ./OnboardLMS/OnboardLMS/lessons
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level0.html
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level1.html
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level2.html
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level3.html
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level4.html
+│           ├── ./OnboardLMS/OnboardLMS/lessons/level5.html
+│           └── ./OnboardLMS/OnboardLMS/lessons/solar-energy.html
+├── ./OnboardLMS-v1.0
+├── ./OnboardLMS-v1.0.zip
+├── ./OnboardLMS.zip
+├── ./PiPress_Gantt.md
+├── ./PiPress_Gantt_Mermaid.md
+├── ./README.md
+├── ./tools
+│   ├── ./tools/configure_ap.sh
+│   ├── ./tools/install_dependencies.sh
+│   ├── ./tools/redirect_clients.sh
+│   ├── ./tools/setup_wordpress.sh
+│   └── ./tools/utils.sh
+└── ./www
+    └── ./www/captive-portal
+        ├── ./www/captive-portal/chapter-10
+        │   └── ./www/captive-portal/chapter-10/index.html
+        ├── ./www/captive-portal/chapter-11
+        │   └── ./www/captive-portal/chapter-11/index.html
+        ├── ./www/captive-portal/chapter-12
+        │   └── ./www/captive-portal/chapter-12/index.html
+        ├── ./www/captive-portal/chapter-13
+        │   └── ./www/captive-portal/chapter-13/index.html
+        ├── ./www/captive-portal/chapter-14
+        │   └── ./www/captive-portal/chapter-14/index.html
+        ├── ./www/captive-portal/chapter-15
+        │   └── ./www/captive-portal/chapter-15/index.html
+        ├── ./www/captive-portal/chapter-16
+        │   └── ./www/captive-portal/chapter-16/index.html
+        ├── ./www/captive-portal/chapter-4
+        │   └── ./www/captive-portal/chapter-4/index.html
+        ├── ./www/captive-portal/chapter-5
+        │   └── ./www/captive-portal/chapter-5/index.html
+        ├── ./www/captive-portal/chapter-6
+        │   └── ./www/captive-portal/chapter-6/index.html
+        ├── ./www/captive-portal/chapter-7
+        │   └── ./www/captive-portal/chapter-7/index.html
+        ├── ./www/captive-portal/chapter-8
+        │   └── ./www/captive-portal/chapter-8/index.html
+        ├── ./www/captive-portal/chapter-9
+        │   └── ./www/captive-portal/chapter-9/index.html
+        ├── ./www/captive-portal/exploring-the-world-of-robotics
+        │   └── ./www/captive-portal/exploring-the-world-of-robotics/index.html
+        ├── ./www/captive-portal/index.html
+        ├── ./www/captive-portal/something-goes-here
+        │   └── ./www/captive-portal/something-goes-here/index.html
+        ├── ./www/captive-portal/third-chapter
+        │   └── ./www/captive-portal/third-chapter/index.html
+        ├── ./www/captive-portal/wp-content
+        │   ├── ./www/captive-portal/wp-content/plugins
+        │   │   ├── ./www/captive-portal/wp-content/plugins/gutenberg
+        │   │   │   └── ./www/captive-portal/wp-content/plugins/gutenberg/build
+        │   │   │       └── ./www/captive-portal/wp-content/plugins/gutenberg/build/block-library
+        │   │   │           └── ./www/captive-portal/wp-content/plugins/gutenberg/build/block-library/style.css
+        │   │   └── ./www/captive-portal/wp-content/plugins/jetpack
+        │   │       └── ./www/captive-portal/wp-content/plugins/jetpack/_inc
+        │   │           ├── ./www/captive-portal/wp-content/plugins/jetpack/_inc/blocks
+        │   │           │   └── ./www/captive-portal/wp-content/plugins/jetpack/_inc/blocks/swiper.css
+        │   │           └── ./www/captive-portal/wp-content/plugins/jetpack/_inc/build
+        │   │               └── ./www/captive-portal/wp-content/plugins/jetpack/_inc/build/carousel
+        │   │                   └── ./www/captive-portal/wp-content/plugins/jetpack/_inc/build/carousel/swiper-bundle.min.js
+        │   ├── ./www/captive-portal/wp-content/themes
+        │   │   └── ./www/captive-portal/wp-content/themes/beatbox
+        │   │       ├── ./www/captive-portal/wp-content/themes/beatbox/assets
+        │   │       │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/fonts.css
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham
+        │   │       │   │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-BoldItalic.otf
+        │   │       │   │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-Bold.otf
+        │   │       │   │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-BookItalic.otf
+        │   │       │   │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-Book.otf
+        │   │       │   │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-MediumItalic.otf
+        │   │       │   │   │   └── ./www/captive-portal/wp-content/themes/beatbox/assets/css/Gotham/Gotham-Medium.otf
+        │   │       │   │   └── ./www/captive-portal/wp-content/themes/beatbox/assets/css/style.css
+        │   │       │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img/arrow-left.svg
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img/arrow-right.svg
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img/expend.svg
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img/logo-footer.svg
+        │   │       │   │   ├── ./www/captive-portal/wp-content/themes/beatbox/assets/img/logo-Icon.svg
+        │   │       │   │   └── ./www/captive-portal/wp-content/themes/beatbox/assets/img/user-robot.svg
+        │   │       │   └── ./www/captive-portal/wp-content/themes/beatbox/assets/js
+        │   │       │       └── ./www/captive-portal/wp-content/themes/beatbox/assets/js/custom.js
+        │   │       └── ./www/captive-portal/wp-content/themes/beatbox/style.css
+        │   └── ./www/captive-portal/wp-content/uploads
+        │       └── ./www/captive-portal/wp-content/uploads/2025
+        │           └── ./www/captive-portal/wp-content/uploads/2025/06
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/clean-shot-300x65.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/clean-shot.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/controller-1024x579.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/controller-1536x868.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/controller-2048x1158.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/controller-300x170.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/controller-768x434.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/game-parts-1-1024x673.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/game-parts-1-1536x1010.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/game-parts-1-2048x1346.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/game-parts-1-300x197.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/game-parts-1-768x505.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-1-1024x921.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-1-1536x1382.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-1-2048x1842.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-1-300x270.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-1-768x691.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-2-1024x682.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-2-1536x1024.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-2-2048x1365.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-2-300x200.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/half-img-2-768x512.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/image-1.svg
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/image1.svg
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/kit-items-2-1024x768.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/kit-items-2-1536x1152.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/kit-items-2-2048x1536.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/kit-items-2-300x225.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/kit-items-2-768x576.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/logo.svg
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/mov_bbb-1.mp4
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/mov_bbb.mp4
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/red-card-1-1024x747.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/red-card-1-1536x1121.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/red-card-1-300x219.png
+        │               ├── ./www/captive-portal/wp-content/uploads/2025/06/red-card-1-768x561.png
+        │               └── ./www/captive-portal/wp-content/uploads/2025/06/red-card-1.png
+        └── ./www/captive-portal/wp-includes
+            └── ./www/captive-portal/wp-includes/js
+                └── ./www/captive-portal/wp-includes/js/jquery
+                    ├── ./www/captive-portal/wp-includes/js/jquery/jquery-migrate.min.js
+                    └── ./www/captive-portal/wp-includes/js/jquery/jquery.min.js
+
+103 directories, 114 files
