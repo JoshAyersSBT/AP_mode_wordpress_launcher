@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# PiPress Launch Script with AP-STA Mode Support
-# Supports:
-# - AP mode (default)
-# - Local LAN hosting (-local)
-# - Fast launch skipping dependency checks (-f or --fastLaunch)
-# - AP-STA mode using uap0 virtual interface
+# PiPress Launch Script with AP-STA Mode Support + Configurable Settings
 
 set -e
 
+CONFIG_FILE="./launch_settings.conf"
 USE_LOCAL=false
 FAST_LAUNCH=false
 
+# Load settings if config file exists
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+fi
+
+# Handle CLI arguments
 for arg in "$@"; do
     case $arg in
         -l|--local)
@@ -22,31 +24,43 @@ for arg in "$@"; do
             FAST_LAUNCH=true
             echo "⚡ Fast launch: skipping dependency checks."
             ;;
+        --config)
+            echo "Opening settings for editing..."
+            nano "$CONFIG_FILE"
+            echo "Settings saved. Re-run the script to apply them."
+            exit 0
+            ;;
     esac
 done
+
+# Save effective settings back to config file
+cat <<EOF > "$CONFIG_FILE"
+USE_LOCAL=$USE_LOCAL
+FAST_LAUNCH=$FAST_LAUNCH
+EOF
 
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
 check_and_install() {
-    local pkg="$1"
-    PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
-    if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
-        echo "Installing $pkg..."
-        sudo apt-get install -y "$pkg"
+    local pkg="\$1"
+    PKG_STATUS=\$(dpkg-query -W -f='\${Status}' "\$pkg" 2>/dev/null || true)
+    if [[ "\$PKG_STATUS" != *"install ok installed"* ]]; then
+        echo "Installing \$pkg..."
+        sudo apt-get install -y "\$pkg"
     else
-        echo "$pkg is already installed."
+        echo "\$pkg is already installed."
     fi
 }
 
-if [ "$FAST_LAUNCH" = false ]; then
+if [ "\$FAST_LAUNCH" = false ]; then
     echo "Checking and installing missing dependencies..."
-    for pkg in "${DEPENDENCIES[@]}"; do
-        check_and_install "$pkg"
+    for pkg in "\${DEPENDENCIES[@]}"; do
+        check_and_install "\$pkg"
     done
     echo "All dependencies are installed."
 fi
 
-if [ "$USE_LOCAL" = false ]; then
+if [ "\$USE_LOCAL" = false ]; then
     echo "Setting up AP-STA mode..."
 
     echo "Stopping hostapd and dnsmasq..."
@@ -61,11 +75,11 @@ if [ "$USE_LOCAL" = false ]; then
 
     echo "Configuring static IP for uap0..."
     if ! grep -q "interface uap0" /etc/dhcpcd.conf; then
-        cat <<EOF | sudo tee -a /etc/dhcpcd.conf
+        cat <<EOF2 | sudo tee -a /etc/dhcpcd.conf
 interface uap0
     static ip_address=192.168.50.1/24
     nohook wpa_supplicant
-EOF
+EOF2
     fi
 
     echo "Enabling IP forwarding..."
@@ -94,17 +108,17 @@ EOF
 fi
 
 # Get active IP
-if [ "$USE_LOCAL" = true ]; then
-    AP_IP=$(hostname -I | awk '{print $1}')
+if [ "\$USE_LOCAL" = true ]; then
+    AP_IP=\$(hostname -I | awk '{print \$1}')
 else
-    AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    AP_IP=\$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 fi
 
-if [ -z "$AP_IP" ]; then
+if [ -z "\$AP_IP" ]; then
     echo "❌ Failed to detect IP address."
     exit 1
 fi
-echo "✅ Detected IP: $AP_IP"
+echo "✅ Detected IP: \$AP_IP"
 
 echo "Launching Apache and WordPress site..."
 sudo systemctl enable apache2
@@ -115,5 +129,5 @@ cd monitor
 nohup python3 app.py > monitor.log 2>&1 &
 
 echo "PiPress setup complete. Access the services using:"
-echo "- Web Portal: http://$AP_IP"
-echo "- Monitor:   http://$AP_IP:5000"
+echo "- Web Portal: http://\$AP_IP"
+echo "- Monitor:   http://\$AP_IP:5000"
