@@ -70,18 +70,6 @@ EOF
     echo "✅ Settings saved."
     exit 0
     ;;
-
-
-USE_LOCAL=$NEW_USE_LOCAL
-FAST_LAUNCH=$NEW_FAST_LAUNCH
-EOF
-
-            echo "✅ Settings updated:"
-            echo "- USE_LOCAL=$NEW_USE_LOCAL"
-            echo "- FAST_LAUNCH=$NEW_FAST_LAUNCH"
-            echo "Re-run the script to apply changes."
-            exit 0
-            ;;
     esac
 done
 

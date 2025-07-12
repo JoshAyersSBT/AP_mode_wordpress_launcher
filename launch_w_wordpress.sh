@@ -63,11 +63,12 @@ if [ "$USE_LOCAL" = false ]; then
 
     echo "Configuring static IP for wlan0..."
     if ! grep -q "interface wlan0" /etc/dhcpcd.conf; then
-        cat <<EOF | sudo tee -a /etc/dhcpcd.conf
+cat <<EOF | sudo tee -a /etc/dhcpcd.conf
 interface wlan0
     static ip_address=192.168.4.1/24
     nohook wpa_supplicant
 EOF
+
     fi
 
     echo "Configuring dnsmasq..."
