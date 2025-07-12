@@ -24,45 +24,62 @@ for arg in "$@"; do
             FAST_LAUNCH=true
             echo "⚡ Fast launch: skipping dependency checks."
             ;;
-        --config)
-            while true; do
-                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10                 "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)"                 "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)"                 "3" "Run install_hostapd_service.py"                 "4" "Run install_dnsmasq_service.py"                 "5" "Exit config utility" 3>&1 1>&2 2>&3)
+--config)
+    while true; do
+        OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
+        "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
+        "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
+        "3" "Run install_hostapd_service.py" \
+        "4" "Run install_dnsmasq_service.py" \
+        "5" "Exit config utility" 3>&1 1>&2 2>&3)
 
-                exitstatus=$?
-                if [ $exitstatus -ne 0 ]; then
-                    echo "Exited config."
-                    exit 0
-                fi
+        exitstatus=$?
+        if [ $exitstatus -ne 0 ]; then
+            echo "Exited config."
+            exit 0
+        fi
 
-                case $OPTION in
-                    1)
-                        USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
-                        ;;
-                    2)
-                        FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
-                        ;;
-                    3)
-                        echo "⚙️ Running install_hostapd_service.py..."
-                        sudo python3 install_hostapd_service.py
-                        ;;
-                    4)
-                        echo "⚙️ Running install_dnsmasq_service.py..."
-                        sudo python3 install_dnsmasq_service.py
-                        ;;
-                    5)
-                        echo "Saving config and exiting..."
-                        break
-                        ;;
-                esac
-            done
+        case $OPTION in
+            1)
+                USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
+                ;;
+            2)
+                FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
+                ;;
+            3)
+                echo "⚙️ Running install_hostapd_service.py..."
+                sudo python3 install_hostapd_service.py
+                ;;
+            4)
+                echo "⚙️ Running install_dnsmasq_service.py..."
+                sudo python3 install_dnsmasq_service.py
+                ;;
+            5)
+                echo "Saving config and exiting..."
+                break
+                ;;
+        esac
+    done
 
-            # Save config after exiting menu
-            cat <<EOF > "$CONFIG_FILE"
+    # Save config after exiting menu
+    cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 EOF
 
-            echo "✅ Settings saved."
+    echo "✅ Settings saved."
+    exit 0
+    ;;
+
+
+USE_LOCAL=$NEW_USE_LOCAL
+FAST_LAUNCH=$NEW_FAST_LAUNCH
+EOF
+
+            echo "✅ Settings updated:"
+            echo "- USE_LOCAL=$NEW_USE_LOCAL"
+            echo "- FAST_LAUNCH=$NEW_FAST_LAUNCH"
+            echo "Re-run the script to apply changes."
             exit 0
             ;;
     esac
@@ -107,7 +124,7 @@ if [ "$USE_LOCAL" = false ]; then
     if [ -d "./monitorEnviroment" ]; then
         echo "🧪 Trying monitorEnviroment..."
         source ./monitorEnviroment/bin/activate
-        if python3 ./monitor/settupAP.py; then
+        if python3 settupAP.py; then
             deactivate
         else
             echo "⚠️ Virtualenv execution failed, falling back to system Python..."
