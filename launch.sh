@@ -76,50 +76,28 @@ if [ "$FAST_LAUNCH" = false ]; then
 fi
 
 if [ "$USE_LOCAL" = false ]; then
-    echo "Setting up AP-STA mode..."
+    echo "🚀 Running AP mode setup with settupAP.py..."
 
-    echo "Stopping hostapd and dnsmasq..."
-    sudo systemctl stop hostapd || echo "hostapd was not running"
-    sudo systemctl stop dnsmasq || echo "dnsmasq was not running"
-
-    echo "Creating uap0 interface..."
-    sudo iw dev wlan0 interface add uap0 type __ap || echo "uap0 already exists"
-
-    echo "Bringing up uap0..."
-    sudo ifconfig uap0 up
-
-    echo "Configuring static IP for uap0..."
-    if ! grep -q "interface uap0" /etc/dhcpcd.conf; then
-        cat <<EOF2 | sudo tee -a /etc/dhcpcd.conf
-interface uap0
-    static ip_address=192.168.50.1/24
-    nohook wpa_supplicant
-EOF2
+    if [ "$EUID" -ne 0 ]; then
+        echo "❌ This script must be run as root for AP setup."
+        exit 1
     fi
 
-    echo "Enabling IP forwarding..."
-    sudo sysctl -w net.ipv4.ip_forward=1
-    sudo sed -i '/net.ipv4.ip_forward/s/^#//g' /etc/sysctl.conf
-
-    echo "Configuring dnsmasq..."
-    sudo cp config/dnsmasq.conf /etc/dnsmasq.conf
-
-    echo "Configuring hostapd..."
-    sudo cp config/hostapd.conf /etc/hostapd/hostapd.conf
-    sudo sed -i 's|#DAEMON_CONF=""|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
-
-    echo "Starting AP services..."
-    sudo systemctl unmask hostapd
-    sudo systemctl enable hostapd
-    sudo systemctl start dnsmasq
-    sudo systemctl start hostapd
-
-    echo "Setting up iptables for NAT..."
-    sudo iptables -t nat -F
-    sudo iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE
-    sudo iptables -A FORWARD -i wlan0 -o uap0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-    sudo iptables -A FORWARD -i uap0 -o wlan0 -j ACCEPT
-    sudo sh -c "iptables-save > /etc/iptables.ipv4.nat"
+    # Try running inside virtual environment first
+    if [ -d "./monitorEnviroment" ]; then
+        echo "🧪 Trying monitorEnviroment..."
+        source ./monitorEnviroment/bin/activate
+        if python3 ./monitor/settupAP.py; then
+            deactivate
+        else
+            echo "⚠️ Virtualenv execution failed, falling back to system Python..."
+            deactivate
+            sudo python3 ./monitor/settupAP.py
+        fi
+    else
+        echo "⚠️ Virtual environment not found. Running with system Python..."
+        sudo python3 ./monitor/settupAP.py
+    fi
 fi
 
 # Get active IP
