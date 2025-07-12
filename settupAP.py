@@ -2,13 +2,13 @@ import subprocess
 import time
 import os
 
-SSID = "PiRepeater"
-PASSWORD = "raspberry"
+SSID = "BetaBox1"
+PASSWORD = "BetaBox1"
 INTERFACE = "uap0"
+WLAN = "wlan0"
 STATIC_AP_IP = "192.168.50.1"
-HOSTAPD_CONF = "/etc/hostapd/hostapd.conf"
+HOSTAPD_CONF = f"/etc/hostapd/hostapd.{INTERFACE}.conf"
 DNSMASQ_CONF = "/etc/dnsmasq.conf"
-HOSTAPD_DEFAULT = "/etc/default/hostapd"
 
 def run(cmd, check=True, capture_output=False):
     print(f"🔧 {cmd}")
@@ -17,59 +17,50 @@ def run(cmd, check=True, capture_output=False):
         return result.stdout.strip()
     else:
         subprocess.run(cmd, shell=True, check=check)
-def reset_wlan0():
-    print("🔄 Reinitializing wlan0...")
-    run("rfkill unblock wifi")
-    run("nmcli radio wifi on")
-    run("nmcli dev set wlan0 managed yes")
-    run("ip link set wlan0 up")
 
-def is_connected():
-    try:
-        output = run("nmcli -t -f DEVICE,STATE dev", capture_output=True)
-        for line in output.splitlines():
-            if "wlan0:connected" in line:
-                return True
-        return False
-    except:
-        return False
 def reset_wlan_interfaces():
-    print("🧹 Resetting all Wi-Fi interfaces...")
+    print("🧹 Resetting wlan0 and cleaning up old AP interfaces...")
 
     run("systemctl stop hostapd", check=False)
     run("systemctl stop dnsmasq", check=False)
-    run("iw dev uap0 del", check=False)
+    run(f"iw dev {INTERFACE} del", check=False)
 
-    # Fully unload and reload the kernel driver
     run("modprobe -r brcmfmac", check=False)
     run("modprobe brcmfmac")
 
     run("rfkill unblock wifi")
     run("nmcli radio wifi on")
-    run("nmcli dev set wlan0 managed yes")
-    run("ip link set wlan0 down")
-    run("ip addr flush dev wlan0")
-    run("ip link set wlan0 up")
+    run(f"nmcli dev set {WLAN} managed yes")
+    run(f"ip link set {WLAN} down")
+    run(f"ip addr flush dev {WLAN}")
+    run(f"ip link set {WLAN} up")
     run("systemctl restart NetworkManager")
 
-    print("✅ wlan0 kernel reset complete.")
-
+def is_connected():
+    try:
+        output = run("nmcli -t -f DEVICE,STATE dev", capture_output=True)
+        for line in output.splitlines():
+            if f"{WLAN}:connected" in line:
+                return True
+        return False
+    except:
+        return False
 
 def attempt_reconnect():
-    print("🔍 Scanning for saved networks...")
+    print("🔍 Scanning and reconnecting to known Wi-Fi networks...")
     run("nmcli radio wifi on")
     run("nmcli dev wifi rescan")
     time.sleep(3)
     known = run("nmcli connection show", capture_output=True)
     networks = [line.split()[0] for line in known.splitlines()[1:] if "wifi" in line]
-    
+
     if not networks:
         print("❌ No saved Wi-Fi networks found.")
         return False
 
-    print("📶 Attempting to connect to known networks...")
     for net in networks:
         try:
+            print(f"📶 Trying to connect to: {net}")
             run(f"nmcli con up '{net}'")
             time.sleep(5)
             if is_connected():
@@ -78,7 +69,7 @@ def attempt_reconnect():
         except subprocess.CalledProcessError:
             continue
 
-    print("❌ Could not connect to any saved network.")
+    print("❌ Could not connect to any known network.")
     return False
 
 def test_internet():
@@ -87,12 +78,18 @@ def test_internet():
         run("ping -c 2 1.1.1.1", check=True)
         return True
     except subprocess.CalledProcessError:
-        print("❌ No internet access.")
         return False
 
+def create_ap_interface():
+    print("🔁 Creating virtual AP interface...")
+    run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
+    run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
+    run(f"ip link set {INTERFACE} up")
+
 def configure_hostapd():
+    print("🛠️ Generating hostapd config...")
     with open(HOSTAPD_CONF, "w") as f:
-        f.write(f"""
+        f.write(f"""\
 interface={INTERFACE}
 driver=nl80211
 ssid={SSID}
@@ -108,25 +105,30 @@ wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 """)
-    run(f'sed -i "s|^#DAEMON_CONF=.*|DAEMON_CONF=\\"{HOSTAPD_CONF}\\"|" {HOSTAPD_DEFAULT}')
-    run(f'sed -i "s|^DAEMON_CONF=.*|DAEMON_CONF=\\"{HOSTAPD_CONF}\\"|" {HOSTAPD_DEFAULT}')
 
 def configure_dnsmasq():
+    print("🛠️ Writing dnsmasq config...")
     with open(DNSMASQ_CONF, "w") as f:
-        f.write(f"""
+        f.write(f"""\
 interface={INTERFACE}
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 """)
 
-def create_ap_interface():
-    print("🔁 Creating AP interface...")
-    run(f"iw dev wlan0 interface add {INTERFACE} type __ap")
-    run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
-    run(f"ip link set {INTERFACE} up")
+def start_ap_services():
+    print("🚀 Starting hostapd...")
+    run(f"hostapd -B {HOSTAPD_CONF}")
 
-def start_services():
-    run("systemctl restart hostapd")
+    print("⏳ Waiting for uap0 to be ready before starting dnsmasq...")
+    for _ in range(10):
+        if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
+            break
+        time.sleep(0.5)
+    else:
+        print("❌ uap0 not found. Aborting DNS.")
+        return
+
+    print("🚀 Starting dnsmasq...")
     run("systemctl restart dnsmasq")
 
 def main():
@@ -135,25 +137,24 @@ def main():
         return
 
     reset_wlan_interfaces()
-    print("⏳ Waiting 5 seconds for interface to reinitialize...")
+    print("⏳ Waiting 5 seconds...")
     time.sleep(5)
 
     if not is_connected():
-        print("📡 Not connected to Wi-Fi. Attempting reconnection...")
         if not attempt_reconnect():
-            print("❌ Aborting: No Wi-Fi.")
+            print("❌ Could not connect to internet.")
             return
 
     if not test_internet():
-        print("❌ Aborting: No internet.")
+        print("❌ Internet unavailable. Aborting.")
         return
 
-    print("✅ Internet confirmed. Proceeding with AP setup.")
+    print("✅ Internet confirmed. Starting AP setup.")
     create_ap_interface()
     configure_hostapd()
     configure_dnsmasq()
-    start_services()
-    print(f"✅ Access Point '{SSID}' ready on {INTERFACE} ({STATIC_AP_IP})")
+    start_ap_services()
+    print(f"✅ AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
     main()
