@@ -1,6 +1,6 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, jsonify
 import subprocess
-from utils.sysinfo import get_status_info
+from utils.sysinfo import get_status_info  # Make sure this import works
 
 app = Flask(__name__)
 
@@ -8,6 +8,10 @@ app = Flask(__name__)
 def dashboard():
     status = get_status_info()
     return render_template("dashboard.html", status=status)
+
+@app.route("/status")
+def status():
+    return jsonify(get_status_info())
 
 @app.route("/control/<action>")
 def control(action):

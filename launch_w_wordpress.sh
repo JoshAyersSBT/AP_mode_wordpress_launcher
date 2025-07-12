@@ -57,11 +57,11 @@ if [ "$USE_LOCAL" = false ]; then
     sudo systemctl stop hostapd || true
     sudo systemctl stop dnsmasq || true
 
-    echo "Status: Enabling IP forwarding..."
+    echo "Enabling IP forwarding..."
     sudo sysctl -w net.ipv4.ip_forward=1
     sudo sed -i '/net.ipv4.ip_forward/s/^#//g' /etc/sysctl.conf
 
-    echo "Status: Configuring static IP for wlan0..."
+    echo "Configuring static IP for wlan0..."
     if ! grep -q "interface wlan0" /etc/dhcpcd.conf; then
         cat <<EOF | sudo tee -a /etc/dhcpcd.conf
 interface wlan0

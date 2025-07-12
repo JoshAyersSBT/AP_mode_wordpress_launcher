@@ -20,6 +20,46 @@
             margin-bottom: 20px;
             box-shadow: 0px 0px 10px #ccc;
         }
+        .gauges {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .gauge {
+            width: 120px;
+            height: 120px;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        .circle-bg {
+            fill: none;
+            stroke: #eee;
+            stroke-width: 3.8;
+        }
+        .circle {
+            fill: none;
+            stroke-width: 3.8;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.5s ease;
+        }
+        .percentage {
+            font-size: 4px;
+            text-anchor: middle;
+            fill: #333;
+            dominant-baseline: middle;
+            font-weight: bold;
+        }
+        .label {
+            font-size: 2.5px;
+            text-anchor: middle;
+            fill: #666;
+            dominant-baseline: middle;
+        }
         .log {
             background: #222;
             color: #0f0;
@@ -39,9 +79,64 @@
 
     <div class="status-box">
         <h2>System Status</h2>
-        <p><strong>CPU Load:</strong> {{ status.cpu_load }}</p>
-        <p><strong>RAM Usage:</strong> {{ status.ram_usage }}</p>
-        <p><strong>Apache Status:</strong> {{ status.apache_status }}</p>
+        <div class="gauges">
+            <div class="gauge">
+                <svg viewBox="0 0 36 36">
+                    <path class="circle-bg"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle" id="cpu-circle"
+                          stroke="{{ status.cpu_color }}"
+                          stroke-dasharray="{{ status.cpu_percent }}, 100"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <g transform="rotate(90 18 18)">
+                        <text x="18" y="20" class="percentage" id="cpu-value">{{ status.cpu_load }}</text>
+                        <text x="18" y="26" class="label">CPU</text>
+                    </g>
+                </svg>
+            </div>
+            <div class="gauge">
+                <svg viewBox="0 0 36 36">
+                    <path class="circle-bg"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle" id="ram-circle"
+                          stroke="{{ status.ram_color }}"
+                          stroke-dasharray="{{ status.ram_percent }}, 100"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <g transform="rotate(90 18 18)">
+                        <text x="18" y="20" class="percentage" id="ram-value">{{ status.ram_usage }}</text>
+                        <text x="18" y="26" class="label">RAM</text>
+                    </g>
+                </svg>
+            </div>
+            <div class="gauge">
+                <svg viewBox="0 0 36 36">
+                    <path class="circle-bg"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle" id="temp-circle"
+                          stroke="{{ status.temp_color }}"
+                          stroke-dasharray="{{ status.temp_percent }}, 100"
+                          d="M18 2.0845
+                             a 15.9155 15.9155 0 0 1 0 31.831
+                             a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <g transform="rotate(90 18 18)">
+                        <text x="18" y="20" class="percentage" id="temp-value">{{ status.temp_c }}</text>
+                        <text x="18" y="26" class="label">TEMP</text>
+                    </g>
+                </svg>
+            </div>
+        </div>
+        
+        <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
     </div>
 
     <div class="status-box">
@@ -56,8 +151,39 @@
     <div class="status-box">
         <h2>Recent Logs</h2>
         <div class="log">
-            <pre>{{ status.logs }}</pre>
+            <pre class="log-content">{{ status.logs }}</pre>
         </div>
     </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch("/status");
+                const data = await res.json();
+
+                document.getElementById("cpu-value").textContent = data.cpu_load;
+                document.getElementById("ram-value").textContent = data.ram_usage;
+                document.getElementById("temp-value").textContent = data.temp_c;
+
+                document.getElementById("cpu-circle").setAttribute("stroke-dasharray", `${data.cpu_percent}, 100`);
+                document.getElementById("cpu-circle").setAttribute("stroke", data.cpu_color);
+
+                document.getElementById("ram-circle").setAttribute("stroke-dasharray", `${data.ram_percent}, 100`);
+                document.getElementById("ram-circle").setAttribute("stroke", data.ram_color);
+
+                document.getElementById("temp-circle").setAttribute("stroke-dasharray", `${data.temp_percent}, 100`);
+                document.getElementById("temp-circle").setAttribute("stroke", data.temp_color);
+
+                document.getElementById("apache-status").textContent = data.apache_status;
+                document.querySelector(".log-content").textContent = data.logs;
+
+            } catch (err) {
+                console.error("Failed to fetch status:", err);
+            }
+        }
+
+        setInterval(fetchStatus, 100); // Update every .10 seconds
+        fetchStatus(); // Initial load
+    </script>
 </body>
 </html>
