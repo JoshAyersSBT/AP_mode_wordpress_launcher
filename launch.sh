@@ -25,16 +25,52 @@ for arg in "$@"; do
             echo "⚡ Fast launch: skipping dependency checks."
             ;;
         --config)
-            echo "🔧 Opening configuration menu..."
+            while true; do
+                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
+                "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
+                "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
+                "3" "Run install_hostapd_service.py" \
+                "4" "Run install_dnsmasq_service.py" \
+                "5" "Exit config utility" 3>&1 1>&2 2>&3)
 
-            # Load current values or use default fallback
-            CUR_USE_LOCAL=${USE_LOCAL:-false}
-            CUR_FAST_LAUNCH=${FAST_LAUNCH:-false}
+                exitstatus=$?
+                if [ $exitstatus -ne 0 ]; then
+                    echo "Exited config."
+                    exit 0
+                fi
 
-            NEW_USE_LOCAL=$(whiptail --title "PiPress Config" --yesno "Use local LAN hosting?\n\nNo = AP mode (default)" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
-            NEW_FAST_LAUNCH=$(whiptail --title "PiPress Config" --yesno "Enable fast launch?\n\nSkip dependency checks?" 12 60 3>&1 1>&2 2>&3 && echo "true" || echo "false")
+                case $OPTION in
+                    1)
+                        USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
+                        ;;
+                    2)
+                        FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
+                        ;;
+                    3)
+                        echo "⚙️ Running install_hostapd_service.py..."
+                        sudo python3 install_hostapd_service.py
+                        ;;
+                    4)
+                        echo "⚙️ Running install_dnsmasq_service.py..."
+                        sudo python3 install_dnsmasq_service.py
+                        ;;
+                    5)
+                        echo "Saving config and exiting..."
+                        break
+                        ;;
+                esac
+            done
 
+            # Save config after exiting menu
             cat <<EOF > "$CONFIG_FILE"
+USE_LOCAL=$USE_LOCAL
+FAST_LAUNCH=$FAST_LAUNCH
+EOF
+
+            echo "✅ Settings saved."
+            exit 0
+            ;;
+
 USE_LOCAL=$NEW_USE_LOCAL
 FAST_LAUNCH=$NEW_FAST_LAUNCH
 EOF
