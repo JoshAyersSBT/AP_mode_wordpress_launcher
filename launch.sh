@@ -4,7 +4,11 @@
 
 set -e
 
-CONFIG_FILE="./launch_settings.conf"
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+MONITOR_DIR="$BASE_DIR/monitor"
+CONFIG_FILE="$BASE_DIR/launch_settings.conf"
+LOG_FILE="$MONITOR_DIR/monitor.log"
+
 USE_LOCAL=false
 FAST_LAUNCH=false
 
@@ -24,52 +28,51 @@ for arg in "$@"; do
             FAST_LAUNCH=true
             echo "⚡ Fast launch: skipping dependency checks."
             ;;
---config)
-    while true; do
-        OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
-        "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
-        "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
-        "3" "Run install_hostapd_service.py" \
-        "4" "Run install_dnsmasq_service.py" \
-        "5" "Exit config utility" 3>&1 1>&2 2>&3)
+        --config)
+            while true; do
+                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
+                "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
+                "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
+                "3" "Run install_hostapd_service.py" \
+                "4" "Run install_dnsmasq_service.py" \
+                "5" "Exit config utility" 3>&1 1>&2 2>&3)
 
-        exitstatus=$?
-        if [ $exitstatus -ne 0 ]; then
-            echo "Exited config."
-            exit 0
-        fi
+                exitstatus=$?
+                if [ $exitstatus -ne 0 ]; then
+                    echo "Exited config."
+                    exit 0
+                fi
 
-        case $OPTION in
-            1)
-                USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
-                ;;
-            2)
-                FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
-                ;;
-            3)
-                echo "⚙️ Running install_hostapd_service.py..."
-                sudo python3 install_hostapd_service.py
-                ;;
-            4)
-                echo "⚙️ Running install_dnsmasq_service.py..."
-                sudo python3 install_dnsmasq_service.py
-                ;;
-            5)
-                echo "Saving config and exiting..."
-                break
-                ;;
-        esac
-    done
+                case $OPTION in
+                    1)
+                        USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
+                        ;;
+                    2)
+                        FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
+                        ;;
+                    3)
+                        echo "⚙️ Running install_hostapd_service.py..."
+                        sudo python3 install_hostapd_service.py
+                        ;;
+                    4)
+                        echo "⚙️ Running install_dnsmasq_service.py..."
+                        sudo python3 install_dnsmasq_service.py
+                        ;;
+                    5)
+                        echo "Saving config and exiting..."
+                        break
+                        ;;
+                esac
+            done
 
-    # Save config after exiting menu
-    cat <<EOF > "$CONFIG_FILE"
+            # Save config after exiting menu
+            cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 EOF
-
-    echo "✅ Settings saved."
-    exit 0
-    ;;
+            echo "✅ Settings saved."
+            exit 0
+            ;;
     esac
 done
 
@@ -93,13 +96,14 @@ check_and_install() {
 }
 
 if [ "$FAST_LAUNCH" = false ]; then
-    echo "Checking and installing missing dependencies..."
+    echo "🔍 Checking and installing missing dependencies..."
     for pkg in "${DEPENDENCIES[@]}"; do
         check_and_install "$pkg"
     done
-    echo "All dependencies are installed."
+    echo "✅ All dependencies are installed."
 fi
 
+# Run AP setup if USE_LOCAL is false
 if [ "$USE_LOCAL" = false ]; then
     echo "🚀 Running AP mode setup with settupAP.py..."
 
@@ -108,24 +112,23 @@ if [ "$USE_LOCAL" = false ]; then
         exit 1
     fi
 
-    # Try running inside virtual environment first
-    if [ -d "./MOnitorEnv" ]; then
-        echo "🧪 Trying monitorEnviroment..."
-        source ./MOnitorEnv/bin/activate
-        if python3 settupAP.py; then
+    if [ -d "$BASE_DIR/MOnitorEnv" ]; then
+        echo "🧪 Activating virtual environment..."
+        source "$BASE_DIR/MOnitorEnv/bin/activate"
+        if python3 "$BASE_DIR/settupAP.py"; then
             deactivate
         else
             echo "⚠️ Virtualenv execution failed, falling back to system Python..."
             deactivate
-            sudo python3 settupAP.py
+            sudo python3 "$BASE_DIR/settupAP.py"
         fi
     else
         echo "⚠️ Virtual environment not found. Running with system Python..."
-        sudo python3 settupAP.py
+        sudo python3 "$BASE_DIR/settupAP.py"
     fi
 fi
 
-# Get active IP
+# Detect IP address
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
@@ -136,16 +139,33 @@ if [ -z "$AP_IP" ]; then
     echo "❌ Failed to detect IP address."
     exit 1
 fi
+
 echo "✅ Detected IP: $AP_IP"
 
-echo "Launching Apache and WordPress site..."
+# Start Apache
+echo "🌀 Launching Apache and WordPress site..."
 sudo systemctl enable apache2
 sudo systemctl restart apache2
 
-echo "Launching monitoring Flask server..."
-cd monitor
-nohup python3 app.py > monitor.log 2>&1 &
+# Launch monitor server
+echo "📊 Launching Flask monitor app from $MONITOR_DIR..."
+cd "$MONITOR_DIR"
 
-echo "PiPress setup complete. Access the services using:"
-echo "- Web Portal: http://$AP_IP"
-echo "- Monitor:   http://$AP_IP:5000"
+# Optional: Clean up old logs
+rm -f "$LOG_FILE"
+
+# Background with logging
+nohup python3 app.py >> "$LOG_FILE" 2>&1 &
+MONITOR_PID=$!
+
+echo "✅ Monitor running with PID $MONITOR_PID"
+echo "📝 Logs: $LOG_FILE"
+
+# Show access instructions
+echo ""
+echo "=============================="
+echo "PiPress setup complete."
+echo "- Web Portal:  http://$AP_IP"
+echo "- Monitor UI:  http://$AP_IP:<assigned_port>"
+echo "- Logs:        $LOG_FILE"
+echo "=============================="
