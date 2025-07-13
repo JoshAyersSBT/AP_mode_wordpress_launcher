@@ -12,58 +12,27 @@
     <div class="status-box">
         <h2>System Status</h2>
         <div class="gauges">
-            <!-- CPU Gauge -->
+            {% for metric in ['cpu', 'ram', 'temp'] %}
             <div class="gauge">
                 <svg viewBox="0 0 36 36">
                     <path class="circle-bg"
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <path class="circle" id="cpu-circle"
-                          stroke="{{ status.cpu_color }}"
-                          stroke-dasharray="{{ status.cpu_percent }}, 100"
+                    <path class="circle" id="{{ metric }}-circle"
+                          stroke="{{ status[metric ~ '_color'] }}"
+                          stroke-dasharray="{{ status[metric ~ '_percent'] }}, 100"
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                     <g transform="rotate(90 18 18)">
-                        <text x="18" y="20" class="percentage" id="cpu-value">{{ status.cpu_load }}</text>
-                        <text x="18" y="26" class="label">CPU</text>
+                        <text x="18" y="20" class="percentage" id="{{ metric }}-value">{{ status[metric ~ '_load'] if metric != 'temp' else status.temp_c }}</text>
+                        <text x="18" y="26" class="label">{{ metric.upper() }}</text>
                     </g>
                 </svg>
             </div>
-
-            <!-- RAM Gauge -->
-            <div class="gauge">
-                <svg viewBox="0 0 36 36">
-                    <path class="circle-bg"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <path class="circle" id="ram-circle"
-                          stroke="{{ status.ram_color }}"
-                          stroke-dasharray="{{ status.ram_percent }}, 100"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <g transform="rotate(90 18 18)">
-                        <text x="18" y="20" class="percentage" id="ram-value">{{ status.ram_usage }}</text>
-                        <text x="18" y="26" class="label">RAM</text>
-                    </g>
-                </svg>
-            </div>
-
-            <!-- TEMP Gauge -->
-            <div class="gauge">
-                <svg viewBox="0 0 36 36">
-                    <path class="circle-bg"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <path class="circle" id="temp-circle"
-                          stroke="{{ status.temp_color }}"
-                          stroke-dasharray="{{ status.temp_percent }}, 100"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <g transform="rotate(90 18 18)">
-                        <text x="18" y="20" class="percentage" id="temp-value">{{ status.temp_c }}</text>
-                        <text x="18" y="26" class="label">TEMP</text>
-                    </g>
-                </svg>
-            </div>
+            {% endfor %}
         </div>
         <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
     </div>
 
-    <!-- Tabbed Controls -->
+    <!-- Tabbed Panel -->
     <div class="status-box tab-container">
         <div class="tabs">
             <button class="tablink active" onclick="openTab(event, 'ApacheTab')">Apache Control</button>
@@ -134,20 +103,14 @@
         fetchStatus();
 
         function openTab(evt, tabId) {
-            const tabs = document.querySelectorAll(".tablink");
-            const contents = document.querySelectorAll(".tab-content");
-
-            tabs.forEach(btn => btn.classList.remove("active"));
-            contents.forEach(c => c.classList.remove("active"));
-
+            document.querySelectorAll(".tablink").forEach(el => el.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
             evt.currentTarget.classList.add("active");
             document.getElementById(tabId).classList.add("active");
         }
 
-        // Ensure correct tab on load
-        window.addEventListener('DOMContentLoaded', () => {
-            const active = document.querySelector('.tablink.active');
-            if (active) active.click();
+        window.addEventListener("DOMContentLoaded", () => {
+            document.querySelector(".tablink.active")?.click();
         });
     </script>
 </body>

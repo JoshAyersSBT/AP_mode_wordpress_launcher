@@ -1,4 +1,3 @@
-/* General Layout */
 body {
     font-family: sans-serif;
     background-color: #f4f4f4;
@@ -11,36 +10,32 @@ h1 {
     text-align: center;
 }
 
-/* Status Boxes */
 .status-box {
     background: white;
     padding: 20px;
     border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
+    margin: 20px auto;
+    box-shadow: 0px 0px 10px #ccc;
+    max-width: 1000px;
 }
 
-/* Gauges */
 .gauges {
     display: flex;
-    gap: 40px;
     justify-content: center;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 40px;
     margin-top: 10px;
 }
 
 .gauge {
     width: 120px;
     height: 120px;
-    flex-shrink: 0;
 }
 
 svg {
-    width: 120px;
-    height: 120px;
+    width: 100%;
+    height: 100%;
     transform: rotate(-90deg);
     display: block;
 }
@@ -59,7 +54,7 @@ svg {
 }
 
 .percentage {
-    font-size: 12px;
+    font-size: 0.6rem;
     text-anchor: middle;
     fill: #333;
     dominant-baseline: middle;
@@ -67,13 +62,12 @@ svg {
 }
 
 .label {
-    font-size: 10px;
+    font-size: 0.4rem;
     text-anchor: middle;
     fill: #666;
     dominant-baseline: middle;
 }
 
-/* Logs */
 .log {
     background: #222;
     color: #0f0;
@@ -82,10 +76,8 @@ svg {
     max-height: 200px;
     overflow-y: auto;
     white-space: pre-wrap;
-    border-radius: 5px;
 }
 
-/* Controls */
 .controls button {
     margin-right: 10px;
     padding: 10px 15px;
@@ -134,27 +126,4 @@ svg {
 
 .tab-content.active {
     display: block;
-}
-
-/* Form Inputs */
-input[type="text"] {
-    padding: 5px;
-    margin-bottom: 10px;
-    width: 100%;
-    max-width: 300px;
-    box-sizing: border-box;
-}
-
-button[type="submit"] {
-    padding: 8px 14px;
-    background: #4caf50;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-    border-radius: 5px;
-}
-
-button[type="submit"]:hover {
-    background: #43a047;
 }
