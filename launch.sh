@@ -109,9 +109,9 @@ if [ "$USE_LOCAL" = false ]; then
     fi
 
     # Try running inside virtual environment first
-    if [ -d "./monitorEnviroment" ]; then
+    if [ -d "./MOnitorEnv" ]; then
         echo "🧪 Trying monitorEnviroment..."
-        source ./monitorEnviroment/bin/activate
+        source ./MOnitorEnv/bin/activate
         if python3 settupAP.py; then
             deactivate
         else
