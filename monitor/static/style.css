@@ -57,7 +57,7 @@ svg {
     font-size: 0.6rem;
     text-anchor: middle;
     fill: #333;
-    dominant-baseline: middle;
+    
     font-weight: bold;
 }
 
@@ -65,7 +65,7 @@ svg {
     font-size: 0.4rem;
     text-anchor: middle;
     fill: #666;
-    dominant-baseline: middle;
+    
 }
 
 .log {
