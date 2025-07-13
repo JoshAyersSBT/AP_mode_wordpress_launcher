@@ -8,6 +8,7 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 MONITOR_DIR="$BASE_DIR/monitor"
 CONFIG_FILE="$BASE_DIR/launch_settings.conf"
 LOG_FILE="$MONITOR_DIR/monitor.log"
+PORT_FILE="$MONITOR_DIR/monitor_port.txt"
 
 USE_LOCAL=false
 FAST_LAUNCH=false
@@ -150,22 +151,33 @@ sudo systemctl restart apache2
 # Launch monitor server
 echo "📊 Launching Flask monitor app from $MONITOR_DIR..."
 cd "$MONITOR_DIR"
-
-# Optional: Clean up old logs
-rm -f "$LOG_FILE"
+rm -f "$LOG_FILE" "$PORT_FILE"
 
 # Background with logging
 nohup python3 app.py >> "$LOG_FILE" 2>&1 &
-MONITOR_PID=$!
 
-echo "✅ Monitor running with PID $MONITOR_PID"
+# Wait for port to be written (timeout after 10s)
+MONITOR_PORT=""
+for i in {1..10}; do
+    if [ -f "$PORT_FILE" ]; then
+        MONITOR_PORT=$(cat "$PORT_FILE")
+        break
+    fi
+    sleep 1
+done
+
+if [ -z "$MONITOR_PORT" ]; then
+    echo "⚠️ Flask port not found in time. Check $PORT_FILE or monitor.log."
+    MONITOR_PORT="???"
+fi
+
+echo "✅ Monitor running with PID $!"
 echo "📝 Logs: $LOG_FILE"
 
-# Show access instructions
 echo ""
 echo "=============================="
 echo "PiPress setup complete."
 echo "- Web Portal:  http://$AP_IP"
-echo "- Monitor UI:  http://$AP_IP:<assigned_port>"
+echo "- Monitor UI:  http://$AP_IP:$MONITOR_PORT"
 echo "- Logs:        $LOG_FILE"
 echo "=============================="

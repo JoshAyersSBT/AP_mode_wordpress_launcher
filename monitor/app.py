@@ -4,11 +4,17 @@ import socket
 import os
 from utils.sysinfo import get_status_info
 
-app = Flask(__name__)
+# Base directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Flask with explicit static/template paths
+app = Flask(__name__,
+            template_folder=os.path.join(BASE_DIR, "templates"),
+            static_folder=os.path.join(BASE_DIR, "static"))
 
 # Config file paths
-SETTINGS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'launch_settings.conf'))
-LMS_SETTINGS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'lms_settings.conf'))
+SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'launch_settings.conf'))
+LMS_SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'lms_settings.conf'))
 
 # -------------------- Config Helpers --------------------
 
@@ -59,7 +65,6 @@ def save_lms_settings(port, directory):
 @app.route("/")
 def dashboard():
     status = get_status_info()
-
     settings = load_launch_settings()
     lms_settings = load_lms_settings()
 
@@ -99,16 +104,19 @@ def update_lms():
 # -------------------- Utility --------------------
 
 def find_free_port():
-    """Find an available port by binding to port 0."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))  # Bind to any free port
+        s.bind(('', 0))
         return s.getsockname()[1]
 
 # -------------------- Entry Point --------------------
 
 if __name__ == "__main__":
     port = find_free_port()
-    with open("monitor_port.txt", "w") as f:
+
+    # Write the port to a file for launch.sh to read
+    port_file_path = os.path.join(BASE_DIR, "monitor_port.txt")
+    with open(port_file_path, "w") as f:
         f.write(str(port))
+
     print(f"🚀 PiPress Monitor running on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port)
