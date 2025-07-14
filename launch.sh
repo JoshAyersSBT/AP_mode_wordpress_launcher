@@ -12,6 +12,7 @@ PORT_FILE="$MONITOR_DIR/monitor_port.txt"
 
 USE_LOCAL=false
 FAST_LAUNCH=false
+VERBOSE=false
 
 # ANSI Colors
 RED='\033[1;31m'
@@ -25,7 +26,7 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-TOTAL_STEPS=7
+TOTAL_STEPS=8
 CURRENT_STEP=0
 
 print_progress() {
@@ -38,6 +39,14 @@ print_progress() {
     tput civis
     printf "\r[%s%s] %3d%% - %s" "$bar" "$spaces" "$percent" "$message"
     sleep 0.5
+}
+
+maybe_run() {
+    if [ "$VERBOSE" = true ]; then
+        "$@"
+    else
+        "$@" > /dev/null 2>&1
+    fi
 }
 
 tput civis
@@ -83,14 +92,19 @@ for arg in "$@"; do
             FAST_LAUNCH=true
             echo -e "${BLUE}[INFO]${NC} Fast launch: skipping dependency checks."
             ;;
+        -v|--verbose)
+            VERBOSE=true
+            echo -e "${BLUE}[INFO]${NC} Verbose mode enabled."
+            ;;
         --config)
             while true; do
                 OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
                 "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
                 "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
-                "3" "Run install_hostapd_service.py" \
-                "4" "Run install_dnsmasq_service.py" \
-                "5" "Exit config utility" 3>&1 1>&2 2>&3)
+                "3" "Toggle VERBOSE (Currently: $VERBOSE)" \
+                "4" "Run install_hostapd_service.py" \
+                "5" "Run install_dnsmasq_service.py" \
+                "6" "Exit config utility" 3>&1 1>&2 2>&3)
 
                 exitstatus=$?
                 if [ $exitstatus -ne 0 ]; then
@@ -101,15 +115,17 @@ for arg in "$@"; do
                 case $OPTION in
                     1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
                     2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
-                    3) sudo python3 install_hostapd_service.py ;;
-                    4) sudo python3 install_dnsmasq_service.py ;;
-                    5) break ;;
+                    3) VERBOSE=$( [ "$VERBOSE" = true ] && echo false || echo true ) ;;
+                    4) sudo python3 install_hostapd_service.py ;;
+                    5) sudo python3 install_dnsmasq_service.py ;;
+                    6) break ;;
                 esac
             done
 
             cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
+VERBOSE=$VERBOSE
 EOF
             echo -e "${GREEN}[SUCCESS]${NC} Settings saved."
             exit 0
@@ -120,15 +136,17 @@ EOF
             ;;
         *)
             echo -e "${RED}[ERROR]${NC} Unknown argument: $arg"
-            echo "Usage: $0 [--local] [--fastLaunch] [--config] [--status]"
+            echo "Usage: $0 [--local] [--fastLaunch] [--verbose] [--config] [--status]"
             exit 1
             ;;
     esac
 done
 
+# Save settings back to config file
 cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
+VERBOSE=$VERBOSE
 EOF
 
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
@@ -137,7 +155,7 @@ check_and_install() {
     local pkg="$1"
     PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
     if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
-        sudo apt-get install -y "$pkg" > /dev/null 2>&1
+        maybe_run sudo apt-get install -y "$pkg"
     fi
 }
 
@@ -156,9 +174,9 @@ if [ "$USE_LOCAL" = false ]; then
 
     print_progress "Running AP mode setup"
     if [ -d "$BASE_DIR/MOnitorEnv" ]; then
-        bash -c "source \"$BASE_DIR/MOnitorEnv/bin/activate\" && python3 \"$BASE_DIR/settupAP.py\" && deactivate" > /dev/null 2>&1
+        maybe_run bash -c "source \"$BASE_DIR/MOnitorEnv/bin/activate\" && python3 \"$BASE_DIR/settupAP.py\" && deactivate"
     else
-        sudo python3 "$BASE_DIR/settupAP.py" > /dev/null 2>&1
+        maybe_run sudo python3 "$BASE_DIR/settupAP.py"
     fi
 fi
 
@@ -175,15 +193,15 @@ if [ -z "$AP_IP" ]; then
 fi
 
 print_progress "Restarting Apache server"
-sudo systemctl restart apache2 > /dev/null 2>&1
-sudo systemctl enable apache2 > /dev/null 2>&1
+maybe_run sudo systemctl restart apache2
+maybe_run sudo systemctl enable apache2
 
 print_progress "Preparing Flask monitor"
 cd "$MONITOR_DIR"
 rm -f "$LOG_FILE" "$PORT_FILE"
 
 print_progress "Launching monitor server"
-nohup python3 app.py >> "$LOG_FILE" 2>&1 &
+maybe_run nohup python3 app.py >> "$LOG_FILE" 2>&1 &
 
 print_progress "Waiting for monitor port"
 MONITOR_PORT=""
