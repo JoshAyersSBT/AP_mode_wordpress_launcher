@@ -1,10 +1,16 @@
 import os
 import subprocess
 from pathlib import Path
+import pwd
+import getpass
+
+# Get the username and their real home directory
+installing_user = getpass.getuser()
+user_home = str(Path(pwd.getpwnam(installing_user).pw_dir))
 
 SERVICE_NAME = "apmode-launcher"
 SERVICE_FILE_PATH = f"/etc/systemd/system/{SERVICE_NAME}.service"
-WORKING_DIR = str(Path.home() / "AP_mode_wordpress_launcher")
+WORKING_DIR = os.path.join(user_home, "AP_mode_wordpress_launcher")
 LAUNCH_CHECK_SCRIPT = os.path.join(WORKING_DIR, "conditional_launch.sh")
 DESCRIPTION = "Startup daemon for AP-mode WordPress launcher with conditional STARTUP flag"
 
