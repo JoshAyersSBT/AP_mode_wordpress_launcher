@@ -1,9 +1,35 @@
+#!/usr/bin/env python3
+
 import subprocess
 import time
 import os
+import configparser
 
+# Paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "..", "launch_settings.conf")
+
+# Default values
 SSID = "BetaBox1"
 PASSWORD = "BetaBox1"
+
+# ---------------- CONFIG LOADER ----------------
+def load_config():
+    global SSID, PASSWORD
+    if not os.path.exists(CONFIG_PATH):
+        print(f"\033[1;33m[WARN]\033[0m Config not found at {CONFIG_PATH}, using defaults.")
+        return
+
+    config = configparser.ConfigParser()
+    config.read(CONFIG_PATH)
+
+    if "NETWORK" in config:
+        SSID = config["NETWORK"].get("SSID", SSID)
+        PASSWORD = config["NETWORK"].get("WAP_PASSPHRASE", PASSWORD)
+    else:
+        print(f"\033[1;33m[WARN]\033[0m NETWORK section missing in config. Using defaults.")
+
+# ---------------- EXISTING CONSTANTS ----------------
 INTERFACE = "uap0"
 WLAN = "wlan0"
 STATIC_AP_IP = "192.168.50.1"
@@ -17,11 +43,13 @@ YELLOW = "\033[1;33m"
 BLUE = "\033[1;34m"
 NC = "\033[0m"
 
+# Logging
 def log_info(msg): print(f"{BLUE}[INFO]{NC} {msg}")
 def log_success(msg): print(f"{GREEN}[SUCCESS]{NC} {msg}")
 def log_warn(msg): print(f"{YELLOW}[WARN]{NC} {msg}")
 def log_error(msg): print(f"{RED}[ERROR]{NC} {msg}")
 
+# Shell runner
 def run(cmd, check=True, capture_output=False):
     log_info(cmd)
     if capture_output:
@@ -30,16 +58,14 @@ def run(cmd, check=True, capture_output=False):
     else:
         subprocess.run(cmd, shell=True, check=check)
 
+# Interface reset
 def reset_wlan_interfaces():
     log_info("Resetting wlan0 and cleaning up old AP interfaces...")
-
     run("systemctl stop hostapd", check=False)
     run("systemctl stop dnsmasq", check=False)
     run(f"iw dev {INTERFACE} del", check=False)
-
     run("modprobe -r brcmfmac", check=False)
     run("modprobe brcmfmac")
-
     run("rfkill unblock wifi")
     run("nmcli radio wifi on")
     run(f"nmcli dev set {WLAN} managed yes")
@@ -48,13 +74,11 @@ def reset_wlan_interfaces():
     run(f"ip link set {WLAN} up")
     run("systemctl restart NetworkManager")
 
+# Connection checks
 def is_connected():
     try:
         output = run("nmcli -t -f DEVICE,STATE dev", capture_output=True)
-        for line in output.splitlines():
-            if f"{WLAN}:connected" in line:
-                return True
-        return False
+        return any(f"{WLAN}:connected" in line for line in output.splitlines())
     except:
         return False
 
@@ -92,6 +116,7 @@ def test_internet():
     except subprocess.CalledProcessError:
         return False
 
+# AP Setup
 def create_ap_interface():
     log_info("Creating virtual AP interface...")
     run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
@@ -130,7 +155,6 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 def start_ap_services():
     log_info("Starting hostapd...")
     run(f"hostapd -B {HOSTAPD_CONF}")
-
     log_info("Waiting for uap0 to be ready before starting dnsmasq...")
     for _ in range(10):
         if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
@@ -139,15 +163,16 @@ def start_ap_services():
     else:
         log_error("uap0 not found. Aborting DNS.")
         return
-
     log_info("Starting dnsmasq...")
     run("systemctl restart dnsmasq")
 
+# Main
 def main():
     if os.geteuid() != 0:
         log_error("Must be run as root.")
         return
 
+    load_config()
     reset_wlan_interfaces()
     log_info("Waiting 5 seconds...")
     time.sleep(5)
