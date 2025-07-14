@@ -4,13 +4,13 @@ from pathlib import Path
 import pwd
 import getpass
 
-# Get the username and their real home directory
+# Get the user running the script and their actual home directory
 installing_user = getpass.getuser()
-user_home = str(Path(pwd.getpwnam(installing_user).pw_dir))
+user_home = Path(pwd.getpwnam(installing_user).pw_dir)
 
 SERVICE_NAME = "apmode-launcher"
 SERVICE_FILE_PATH = f"/etc/systemd/system/{SERVICE_NAME}.service"
-WORKING_DIR = os.path.join(user_home, "AP_mode_wordpress_launcher")
+WORKING_DIR = str(user_home / "AP_mode_wordpress_launcher")
 LAUNCH_CHECK_SCRIPT = os.path.join(WORKING_DIR, "conditional_launch.sh")
 DESCRIPTION = "Startup daemon for AP-mode WordPress launcher with conditional STARTUP flag"
 
@@ -24,7 +24,7 @@ if [ -f "$CONF_FILE" ]; then
     STARTUP=$(grep -i '^STARTUP=' "$CONF_FILE" | cut -d '=' -f 2 | tr '[:upper:]' '[:lower:]')
     if [ "$STARTUP" = "true" ]; then
         echo "STARTUP flag is true. Launching with root privileges..."
-        sudo bash "$LAUNCH_SCRIPT"
+        bash "$LAUNCH_SCRIPT"
     else
         echo "STARTUP flag is false. Skipping launch."
     fi
