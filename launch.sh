@@ -23,7 +23,6 @@ NC='\033[0m'  # No Color
 
 # Load settings if config file exists
 if [ -f "$CONFIG_FILE" ]; then
-    if [ -f "$CONFIG_FILE" ]; then
     while IFS='=' read -r key val; do
         case $key in
             USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
