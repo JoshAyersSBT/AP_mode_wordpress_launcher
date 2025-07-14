@@ -40,11 +40,19 @@ run_with_spinner() {
     shift
     start_spinner "$message" &
     spinner_pid=$!
+    set +e
     "$@" > /dev/null 2>&1
+    local exit_code=$?
+    set -e
     kill "$spinner_pid" >/dev/null 2>&1
     wait "$spinner_pid" 2>/dev/null
-    printf "\r✅ %s... Done.\n" "$message"
-    tput cnorm  # show cursor
+    tput cnorm
+    if [ $exit_code -eq 0 ]; then
+        printf "\r✅ %s... Done.\n" "$message"
+    else
+        printf "\r❌ %s... Failed.\n" "$message"
+    fi
+    return $exit_code
 }
 
 show_status() {
