@@ -18,6 +18,36 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
+show_status() {
+    launch_pid=$(pgrep -f "bash .*launch.sh" | grep -v $$ || true)
+    apache_status=$(systemctl is-active apache2 || echo "inactive")
+    hostapd_status=$(systemctl is-active hostapd || echo "inactive")
+    dnsmasq_status=$(systemctl is-active dnsmasq || echo "inactive")
+
+    monitor_pid=$(pgrep -f "python3.*app.py" || true)
+    monitor_port=$(ss -tuln | grep ":5000 " || true)
+
+    if [ -n "$monitor_pid" ]; then
+        monitor_status="Running (PID: $monitor_pid)"
+    else
+        monitor_status="Not Running"
+    fi
+
+    if [ -n "$monitor_port" ]; then
+        monitor_status+=" | Port 5000: Listening"
+    else
+        monitor_status+=" | Port 5000: Not Listening"
+    fi
+
+    STATUS_TEXT="Launch Script PID: ${launch_pid:-Not Running}\n"
+    STATUS_TEXT+="Apache2: $apache_status\n"
+    STATUS_TEXT+="hostapd: $hostapd_status\n"
+    STATUS_TEXT+="dnsmasq: $dnsmasq_status\n"
+    STATUS_TEXT+="System Monitor: $monitor_status\n"
+
+    whiptail --title "PiPress Status Report" --msgbox "$STATUS_TEXT" 20 70
+}
+
 # Handle CLI arguments
 for arg in "$@"; do
     case $arg in
@@ -27,7 +57,7 @@ for arg in "$@"; do
             ;;
         -f|--fastLaunch)
             FAST_LAUNCH=true
-            echo "⚡ Fast launch: skipping dependency checks."
+            echo "Status: Fast launch: skipping dependency checks."
             ;;
         --config)
             while true; do
@@ -52,11 +82,11 @@ for arg in "$@"; do
                         FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
                         ;;
                     3)
-                        echo "⚙️ Running install_hostapd_service.py..."
+                        echo "Status Running install_hostapd_service.py..."
                         sudo python3 install_hostapd_service.py
                         ;;
                     4)
-                        echo "⚙️ Running install_dnsmasq_service.py..."
+                        echo "Status Running install_dnsmasq_service.py..."
                         sudo python3 install_dnsmasq_service.py
                         ;;
                     5)
@@ -71,8 +101,17 @@ for arg in "$@"; do
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 EOF
-            echo "✅ Settings saved."
+            echo "Status: Settings saved."
             exit 0
+            ;;
+        -s|--status)
+            show_status
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown argument: $arg"
+            echo "Usage: $0 [--local] [--fastLaunch] [--config] [--status]"
+            exit 1
             ;;
     esac
 done
@@ -97,34 +136,34 @@ check_and_install() {
 }
 
 if [ "$FAST_LAUNCH" = false ]; then
-    echo "🔍 Checking and installing missing dependencies..."
+    echo "Status: Checking and installing missing dependencies..."
     for pkg in "${DEPENDENCIES[@]}"; do
         check_and_install "$pkg"
     done
-    echo "✅ All dependencies are installed."
+    echo "Status: All dependencies are installed."
 fi
 
 # Run AP setup if USE_LOCAL is false
 if [ "$USE_LOCAL" = false ]; then
-    echo "🚀 Running AP mode setup with settupAP.py..."
+    echo "Status: Running AP mode setup with settupAP.py..."
 
     if [ "$EUID" -ne 0 ]; then
-        echo "❌ This script must be run as root for AP setup."
+        echo "Error: This script must be run as root for AP setup."
         exit 1
     fi
 
     if [ -d "$BASE_DIR/MOnitorEnv" ]; then
-        echo "🧪 Activating virtual environment..."
+        echo "Status: Activating virtual environment..."
         source "$BASE_DIR/MOnitorEnv/bin/activate"
         if python3 "$BASE_DIR/settupAP.py"; then
             deactivate
         else
-            echo "⚠️ Virtualenv execution failed, falling back to system Python..."
+            echo "Warn: Virtualenv execution failed, falling back to system Python..."
             deactivate
             sudo python3 "$BASE_DIR/settupAP.py"
         fi
     else
-        echo "⚠️ Virtual environment not found. Running with system Python..."
+        echo "Warn: Virtual environment not found. Running with system Python..."
         sudo python3 "$BASE_DIR/settupAP.py"
     fi
 fi
@@ -137,23 +176,22 @@ else
 fi
 
 if [ -z "$AP_IP" ]; then
-    echo "❌ Failed to detect IP address."
+    echo "Error: Failed to detect IP address."
     exit 1
 fi
 
-echo "✅ Detected IP: $AP_IP"
+echo "Detected IP: $AP_IP"
 
 # Start Apache
-echo "🌀 Launching Apache and WordPress site..."
+echo "Launching Apache and WordPress site..."
 sudo systemctl enable apache2
 sudo systemctl restart apache2
 
 # Launch monitor server
-echo "📊 Launching Flask monitor app from $MONITOR_DIR..."
+echo "Launching Flask monitor app from $MONITOR_DIR..."
 cd "$MONITOR_DIR"
 rm -f "$LOG_FILE" "$PORT_FILE"
 
-# Background with logging
 nohup python3 app.py >> "$LOG_FILE" 2>&1 &
 
 # Wait for port to be written (timeout after 10s)
@@ -167,12 +205,12 @@ for i in {1..10}; do
 done
 
 if [ -z "$MONITOR_PORT" ]; then
-    echo "⚠️ Flask port not found in time. Check $PORT_FILE or monitor.log."
+    echo "!! Flask port not found in time. Check $PORT_FILE or monitor.log."
     MONITOR_PORT="???"
 fi
 
-echo "✅ Monitor running with PID $!"
-echo "📝 Logs: $LOG_FILE"
+echo "Monitor running with PID $!"
+echo "Logs: $LOG_FILE"
 
 echo ""
 echo "=============================="
