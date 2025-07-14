@@ -23,7 +23,14 @@ NC='\033[0m'  # No Color
 
 # Load settings if config file exists
 if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
+    if [ -f "$CONFIG_FILE" ]; then
+    while IFS='=' read -r key val; do
+        case $key in
+            USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
+                eval "$key=\"$val\""
+                ;;
+        esac
+    done < <(grep -v '^\s*#' "$CONFIG_FILE" | grep '=')
 fi
 
 TOTAL_STEPS=8
