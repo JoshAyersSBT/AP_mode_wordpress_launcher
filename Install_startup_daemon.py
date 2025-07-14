@@ -4,11 +4,10 @@ from pathlib import Path
 import pwd
 import getpass
 
-# Get the current user and their true home directory
+# Get the installing user's name and home directory
 installing_user = getpass.getuser()
 home_dir = Path(pwd.getpwnam(installing_user).pw_dir).resolve()
 
-# Define key paths
 SERVICE_NAME = "apmode-launcher"
 SERVICE_FILE_PATH = f"/etc/systemd/system/{SERVICE_NAME}.service"
 WORKING_DIR = str(home_dir / "AP_mode_wordpress_launcher")
@@ -25,8 +24,8 @@ LAUNCH_SCRIPT="{LAUNCH_SCRIPT_PATH}"
 if [ -f "$CONF_FILE" ]; then
     STARTUP=$(grep -i '^STARTUP=' "$CONF_FILE" | cut -d '=' -f 2 | tr '[:upper:]' '[:lower:]')
     if [ "$STARTUP" = "true" ]; then
-        echo "STARTUP flag is true. Running launch script..."
-        bash "$LAUNCH_SCRIPT"
+        echo "STARTUP flag is true. Running launch script with sudo..."
+        sudo bash "$LAUNCH_SCRIPT"
     else
         echo "STARTUP flag is false. Skipping launch."
     fi
@@ -47,11 +46,12 @@ After=network.target
 
 [Service]
 ExecStart={CHECK_SCRIPT_PATH}
-User=root
+User={installing_user}
 WorkingDirectory={WORKING_DIR}
 Restart=always
 StandardOutput=journal
 StandardError=journal
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
