@@ -18,42 +18,22 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-spinner_pid=""
-print_step() {
+TOTAL_STEPS=8
+CURRENT_STEP=0
+
+print_progress() {
     local message="$1"
-    tput civis  # hide cursor
-    printf "\r⏳ %s... " "$message"
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    local percent=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+    local bar_len=$((percent / 10))
+    local bar=$(printf '%0.s#' $(seq 1 $bar_len))
+    local spaces=$(printf '%0.s-' $(seq 1 $((10 - bar_len))))
+    tput civis
+    printf "\r[%s%s] %3d%% - %s" "$bar" "$spaces" "$percent" "$message"
+    sleep 0.5  # Optional visual pacing
 }
 
-start_spinner() {
-    local spin='|/-\'
-    local i=0
-    while true; do
-        i=$(( (i+1) % 4 ))
-        printf "\r⏳ %s... %s" "$1" "${spin:$i:1}"
-        sleep 0.1
-    done
-}
-
-run_with_spinner() {
-    local message="$1"
-    shift
-    start_spinner "$message" &
-    spinner_pid=$!
-    set +e
-    "$@" > /dev/null 2>&1
-    local exit_code=$?
-    set -e
-    kill "$spinner_pid" >/dev/null 2>&1
-    wait "$spinner_pid" 2>/dev/null
-    tput cnorm
-    if [ $exit_code -eq 0 ]; then
-        printf "\r✅ %s... Done.\n" "$message"
-    else
-        printf "\r❌ %s... Failed.\n" "$message"
-    fi
-    return $exit_code
-}
+tput civis
 
 show_status() {
     launch_pid=$(pgrep -f "bash .*launch.sh" | grep -v $$ || true)
@@ -94,7 +74,7 @@ for arg in "$@"; do
             ;;
         -f|--fastLaunch)
             FAST_LAUNCH=true
-            echo "Status: Fast launch: skipping dependency checks."
+            echo "⚡ Fast launch: skipping dependency checks."
             ;;
         --config)
             while true; do
@@ -124,7 +104,7 @@ for arg in "$@"; do
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 EOF
-            echo "Status: Settings saved."
+            echo "✅ Settings saved."
             exit 0
             ;;
         -s|--status)
@@ -150,41 +130,32 @@ check_and_install() {
     local pkg="$1"
     PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
     if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
-        sudo apt-get install -y "$pkg"
+        sudo apt-get install -y "$pkg" > /dev/null 2>&1
     fi
 }
 
 if [ "$FAST_LAUNCH" = false ]; then
-    print_step "Checking and installing missing dependencies"
+    print_progress "Installing dependencies"
     for pkg in "${DEPENDENCIES[@]}"; do
-        run_with_spinner "Installing $pkg" check_and_install "$pkg"
+        check_and_install "$pkg"
     done
 fi
 
-# Run AP setup if USE_LOCAL is false
 if [ "$USE_LOCAL" = false ]; then
-    print_step "Running AP mode setup"
     if [ "$EUID" -ne 0 ]; then
-        echo "Error: This script must be run as root for AP setup."
+        echo "❌ This script must be run as root for AP setup."
         exit 1
     fi
 
+    print_progress "Running AP mode setup"
     if [ -d "$BASE_DIR/MOnitorEnv" ]; then
-        print_step "Activating virtual environment"
-        source "$BASE_DIR/MOnitorEnv/bin/activate"
-        if python3 "$BASE_DIR/settupAP.py"; then
-            deactivate
-        else
-            deactivate
-            sudo python3 "$BASE_DIR/settupAP.py"
-        fi
+        bash -c "source \"$BASE_DIR/MOnitorEnv/bin/activate\" && python3 \"$BASE_DIR/settupAP.py\" && deactivate" > /dev/null 2>&1
     else
-        sudo python3 "$BASE_DIR/settupAP.py"
+        sudo python3 "$BASE_DIR/settupAP.py" > /dev/null 2>&1
     fi
 fi
 
-# Detect IP address
-print_step "Detecting IP address"
+print_progress "Detecting IP address"
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
@@ -192,24 +163,22 @@ else
 fi
 
 if [ -z "$AP_IP" ]; then
-    echo "Error: Failed to detect IP address."
+    echo "❌ Failed to detect IP address."
     exit 1
 fi
 
-echo "Detected IP: $AP_IP"
+print_progress "Restarting Apache server"
+sudo systemctl restart apache2 > /dev/null 2>&1
+sudo systemctl enable apache2 > /dev/null 2>&1
 
-# Start Apache
-run_with_spinner "Starting Apache server" sudo systemctl restart apache2
-sudo systemctl enable apache2
-
-# Launch monitor server
-print_step "Launching Flask monitor app"
+print_progress "Preparing Flask monitor"
 cd "$MONITOR_DIR"
 rm -f "$LOG_FILE" "$PORT_FILE"
+
+print_progress "Launching monitor server"
 nohup python3 app.py >> "$LOG_FILE" 2>&1 &
 
-# Wait for port to be written
-print_step "Waiting for monitor port file"
+print_progress "Waiting for monitor port"
 MONITOR_PORT=""
 for i in {1..10}; do
     if [ -f "$PORT_FILE" ]; then
@@ -219,17 +188,16 @@ for i in {1..10}; do
     sleep 1
 done
 
+tput cnorm
+
 if [ -z "$MONITOR_PORT" ]; then
-    echo "!! Flask port not found in time. Check $PORT_FILE or monitor.log."
+    echo "⚠️  Flask monitor port not found. Check $PORT_FILE or $LOG_FILE."
     MONITOR_PORT="???"
 fi
 
-echo "Monitor running with PID $!"
-echo "Logs: $LOG_FILE"
-
 echo ""
 echo "=============================="
-echo "PiPress setup complete."
+echo "✅ PiPress setup complete."
 echo "- Web Portal:  http://$AP_IP"
 echo "- Monitor UI:  http://$AP_IP:$MONITOR_PORT"
 echo "- Logs:        $LOG_FILE"
