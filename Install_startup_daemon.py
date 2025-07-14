@@ -1,53 +1,52 @@
 import os
 import subprocess
 from pathlib import Path
-import pwd
 import getpass
 
-# Get the installing user's name and home directory
-installing_user = getpass.getuser()
-home_dir = Path(pwd.getpwnam(installing_user).pw_dir).resolve()
+# Get current user and correct home path
+user = getpass.getuser()
+home_dir = str(Path.home())
+launcher_dir = os.path.join(home_dir, "AP_mode_wordpress_launcher")
+launch_script = os.path.join(launcher_dir, "launch.sh")
+config_file = os.path.join(launcher_dir, "launch_settings.conf")
+check_script = os.path.join(launcher_dir, "conditional_launch.sh")
+service_name = "apmode-launcher"
+service_file = f"/etc/systemd/system/{service_name}.service"
 
-SERVICE_NAME = "apmode-launcher"
-SERVICE_FILE_PATH = f"/etc/systemd/system/{SERVICE_NAME}.service"
-WORKING_DIR = str(home_dir / "AP_mode_wordpress_launcher")
-LAUNCH_SCRIPT_PATH = os.path.join(WORKING_DIR, "launch.sh")
-CONF_FILE_PATH = os.path.join(WORKING_DIR, "launch_settings.conf")
-CHECK_SCRIPT_PATH = os.path.join(WORKING_DIR, "conditional_launch.sh")
-
-def create_conditional_script():
+def write_conditional_script():
     script = f"""#!/bin/bash
 
-CONF_FILE="{CONF_FILE_PATH}"
-LAUNCH_SCRIPT="{LAUNCH_SCRIPT_PATH}"
+CONF_FILE="{config_file}"
+LAUNCH_SCRIPT="{launch_script}"
 
 if [ -f "$CONF_FILE" ]; then
     STARTUP=$(grep -i '^STARTUP=' "$CONF_FILE" | cut -d '=' -f 2 | tr '[:upper:]' '[:lower:]')
     if [ "$STARTUP" = "true" ]; then
-        echo "STARTUP flag is true. Running launch script with sudo..."
+        echo "STARTUP=true. Launching..."
         sudo bash "$LAUNCH_SCRIPT"
     else
-        echo "STARTUP flag is false. Skipping launch."
+        echo "STARTUP=false. Skipping launch."
     fi
 else
-    echo "Configuration file not found: $CONF_FILE"
+    echo "Config not found: $CONF_FILE"
 fi
 """
-    print(f"✅ Writing conditional script to: {CHECK_SCRIPT_PATH}")
+    print(f"📄 Writing conditional_launch.sh to {check_script}")
     with open("/tmp/conditional_launch.sh", "w") as f:
         f.write(script)
-    subprocess.run(["sudo", "mv", "/tmp/conditional_launch.sh", CHECK_SCRIPT_PATH], check=True)
-    subprocess.run(["sudo", "chmod", "+x", CHECK_SCRIPT_PATH], check=True)
+    subprocess.run(["sudo", "mv", "/tmp/conditional_launch.sh", check_script], check=True)
+    subprocess.run(["sudo", "chmod", "+x", check_script], check=True)
 
-def create_service_file():
+def write_service_file():
     service = f"""[Unit]
-Description=Start WordPress launcher on boot if STARTUP flag is true
+Description=Launch AP Mode WordPress server if STARTUP flag is set
 After=network.target
 
 [Service]
-ExecStart={CHECK_SCRIPT_PATH}
-User={installing_user}
-WorkingDirectory={WORKING_DIR}
+Type=simple
+User={user}
+WorkingDirectory={launcher_dir}
+ExecStart={check_script}
 Restart=always
 StandardOutput=journal
 StandardError=journal
@@ -56,25 +55,27 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 """
-    print(f"✅ Writing service file to: {SERVICE_FILE_PATH}")
-    with open("/tmp/{SERVICE_NAME}.service", "w") as f:
+    print(f"🧾 Writing service to {service_file}")
+    with open("/tmp/apmode-launcher.service", "w") as f:
         f.write(service)
-    subprocess.run(["sudo", "mv", f"/tmp/{SERVICE_NAME}.service", SERVICE_FILE_PATH], check=True)
-    subprocess.run(["sudo", "chmod", "644", SERVICE_FILE_PATH], check=True)
+    subprocess.run(["sudo", "mv", "/tmp/apmode-launcher.service", service_file], check=True)
+    subprocess.run(["sudo", "chmod", "644", service_file], check=True)
 
 def enable_service():
-    print("✅ Enabling systemd service...")
+    print("🔄 Reloading and enabling service...")
     subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
-    subprocess.run(["sudo", "systemctl", "enable", SERVICE_NAME], check=True)
-    subprocess.run(["sudo", "systemctl", "start", SERVICE_NAME], check=True)
+    subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
+    subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
 
 def main():
-    if not os.path.isfile(LAUNCH_SCRIPT_PATH):
-        print(f"❌ ERROR: launch.sh not found at: {LAUNCH_SCRIPT_PATH}")
+    if not os.path.isfile(launch_script):
+        print(f"❌ launch.sh not found at {launch_script}")
         return
-
-    create_conditional_script()
-    create_service_file()
+    if not os.path.isfile(config_file):
+        print(f"⚠️ launch_settings.conf not found at {config_file} (defaulting to STARTUP=false behavior)")
+    
+    write_conditional_script()
+    write_service_file()
     enable_service()
     print("✅ Startup daemon installed successfully.")
 
