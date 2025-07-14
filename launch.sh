@@ -13,6 +13,13 @@ PORT_FILE="$MONITOR_DIR/monitor_port.txt"
 USE_LOCAL=false
 FAST_LAUNCH=false
 
+# ANSI Colors
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+NC='\033[0m'  # No Color
+
 # Load settings if config file exists
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
@@ -30,7 +37,7 @@ print_progress() {
     local spaces=$(printf '%0.s-' $(seq 1 $((10 - bar_len))))
     tput civis
     printf "\r[%s%s] %3d%% - %s" "$bar" "$spaces" "$percent" "$message"
-    sleep 0.5  # Optional visual pacing
+    sleep 0.5
 }
 
 tput civis
@@ -70,11 +77,11 @@ for arg in "$@"; do
     case $arg in
         -l|--local)
             USE_LOCAL=true
-            echo "📡 Local network hosting enabled."
+            echo -e "${BLUE}[INFO]${NC} Local network hosting enabled."
             ;;
         -f|--fastLaunch)
             FAST_LAUNCH=true
-            echo "⚡ Fast launch: skipping dependency checks."
+            echo -e "${BLUE}[INFO]${NC} Fast launch: skipping dependency checks."
             ;;
         --config)
             while true; do
@@ -87,7 +94,7 @@ for arg in "$@"; do
 
                 exitstatus=$?
                 if [ $exitstatus -ne 0 ]; then
-                    echo "Exited config."
+                    echo -e "${YELLOW}[WARN]${NC} Exited config."
                     exit 0
                 fi
 
@@ -104,7 +111,7 @@ for arg in "$@"; do
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 EOF
-            echo "✅ Settings saved."
+            echo -e "${GREEN}[SUCCESS]${NC} Settings saved."
             exit 0
             ;;
         -s|--status)
@@ -112,7 +119,7 @@ EOF
             exit 0
             ;;
         *)
-            echo "❌ Unknown argument: $arg"
+            echo -e "${RED}[ERROR]${NC} Unknown argument: $arg"
             echo "Usage: $0 [--local] [--fastLaunch] [--config] [--status]"
             exit 1
             ;;
@@ -143,7 +150,7 @@ fi
 
 if [ "$USE_LOCAL" = false ]; then
     if [ "$EUID" -ne 0 ]; then
-        echo "❌ This script must be run as root for AP setup."
+        echo -e "${RED}[ERROR]${NC} This script must be run as root for AP setup."
         exit 1
     fi
 
@@ -163,7 +170,7 @@ else
 fi
 
 if [ -z "$AP_IP" ]; then
-    echo "❌ Failed to detect IP address."
+    echo -e "${RED}[ERROR]${NC} Failed to detect IP address."
     exit 1
 fi
 
@@ -188,16 +195,17 @@ for i in {1..10}; do
     sleep 1
 done
 
+print_progress "Finalizing setup"
 tput cnorm
 
 if [ -z "$MONITOR_PORT" ]; then
-    echo "⚠️  Flask monitor port not found. Check $PORT_FILE or $LOG_FILE."
+    echo -e "${YELLOW}[WARN]${NC} Flask monitor port not found. Check $PORT_FILE or $LOG_FILE."
     MONITOR_PORT="???"
 fi
 
 echo ""
+echo -e "${GREEN}[SUCCESS]${NC} PiPress setup complete."
 echo "=============================="
-echo "✅ PiPress setup complete."
 echo "- Web Portal:  http://$AP_IP"
 echo "- Monitor UI:  http://$AP_IP:$MONITOR_PORT"
 echo "- Logs:        $LOG_FILE"
