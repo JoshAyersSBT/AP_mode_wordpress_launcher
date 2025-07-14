@@ -25,7 +25,7 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-TOTAL_STEPS=8
+TOTAL_STEPS=7
 CURRENT_STEP=0
 
 print_progress() {
