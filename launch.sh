@@ -96,40 +96,53 @@ for arg in "$@"; do
             VERBOSE=true
             echo -e "${BLUE}[INFO]${NC} Verbose mode enabled."
             ;;
---config)
-    while true; do
-        OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
-        "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
-        "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
-        "3" "Toggle VERBOSE (Currently: $VERBOSE)" \
-        "4" "Run install_hostapd_service.py" \
-        "5" "Run install_dnsmasq_service.py" \
-        "6" "Exit config utility" 3>&1 1>&2 2>&3)
+        --config)
+            while true; do
+                CURRENT_SSID=$(awk -F= '/^SSID=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
+                CURRENT_PASS=$(awk -F= '/^WAP_PASSPHRASE=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
 
-        exitstatus=$?
-        if [ $exitstatus -ne 0 ]; then
-            echo -e "${YELLOW}[WARN]${NC} Exited config."
-            exit 0
-        fi
+                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
+                "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
+                "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
+                "3" "Toggle VERBOSE (Currently: $VERBOSE)" \
+                "4" "Run install_hostapd_service.py" \
+                "5" "Run install_dnsmasq_service.py" \
+                "6" "Edit SSID and WAP Passphrase" \
+                "7" "Exit config utility" 3>&1 1>&2 2>&3)
 
-        case $OPTION in
-            1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
-            2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
-            3) VERBOSE=$( [ "$VERBOSE" = true ] && echo false || echo true ) ;;
-            4) sudo python3 install_hostapd_service.py ;;
-            5) sudo python3 install_dnsmasq_service.py ;;
-            6)
-                cat <<EOF > "$CONFIG_FILE"
+                exitstatus=$?
+                if [ $exitstatus -ne 0 ]; then
+                    echo -e "${YELLOW}[WARN]${NC} Exited config."
+                    exit 0
+                fi
+
+                case $OPTION in
+                    1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
+                    2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
+                    3) VERBOSE=$( [ "$VERBOSE" = true ] && echo false || echo true ) ;;
+                    4) sudo python3 install_hostapd_service.py ;;
+                    5) sudo python3 install_dnsmasq_service.py ;;
+                    6)
+                        new_ssid=$(whiptail --inputbox "Enter new SSID (leave blank to keep current: $CURRENT_SSID):" 10 60 3>&1 1>&2 2>&3)
+                        [ -n "$new_ssid" ] && CURRENT_SSID="$new_ssid"
+
+                        new_pass=$(whiptail --inputbox "Enter new WAP Passphrase (leave blank to keep current):" 10 60 3>&1 1>&2 2>&3)
+                        [ -n "$new_pass" ] && CURRENT_PASS="$new_pass"
+                        ;;
+                    7)
+                        cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 VERBOSE=$VERBOSE
+SSID=${CURRENT_SSID:-BetaBox1}
+WAP_PASSPHRASE=${CURRENT_PASS:-BetaBox1}
 EOF
-                echo -e "${GREEN}[SUCCESS]${NC} Settings saved."
-                exit 0
-                ;;
-        esac
-    done
-    ;;
+                        echo -e "${GREEN}[SUCCESS]${NC} Settings saved."
+                        exit 0
+                        ;;
+                esac
+            done
+            ;;
         -s|--status)
             show_status
             exit 0
@@ -142,7 +155,7 @@ EOF
     esac
 done
 
-# Save settings back to config file
+# Save basic config settings (without SSID/passphrase) on normal run
 cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
