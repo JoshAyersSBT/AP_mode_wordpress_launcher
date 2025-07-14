@@ -18,6 +18,35 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
+spinner_pid=""
+print_step() {
+    local message="$1"
+    tput civis  # hide cursor
+    printf "\r⏳ %s... " "$message"
+}
+
+start_spinner() {
+    local spin='|/-\'
+    local i=0
+    while true; do
+        i=$(( (i+1) % 4 ))
+        printf "\r⏳ %s... %s" "$1" "${spin:$i:1}"
+        sleep 0.1
+    done
+}
+
+run_with_spinner() {
+    local message="$1"
+    shift
+    start_spinner "$message" &
+    spinner_pid=$!
+    "$@" > /dev/null 2>&1
+    kill "$spinner_pid" >/dev/null 2>&1
+    wait "$spinner_pid" 2>/dev/null
+    printf "\r✅ %s... Done.\n" "$message"
+    tput cnorm  # show cursor
+}
+
 show_status() {
     launch_pid=$(pgrep -f "bash .*launch.sh" | grep -v $$ || true)
     apache_status=$(systemctl is-active apache2 || echo "inactive")
@@ -75,28 +104,14 @@ for arg in "$@"; do
                 fi
 
                 case $OPTION in
-                    1)
-                        USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true )
-                        ;;
-                    2)
-                        FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true )
-                        ;;
-                    3)
-                        echo "Status Running install_hostapd_service.py..."
-                        sudo python3 install_hostapd_service.py
-                        ;;
-                    4)
-                        echo "Status Running install_dnsmasq_service.py..."
-                        sudo python3 install_dnsmasq_service.py
-                        ;;
-                    5)
-                        echo "Saving config and exiting..."
-                        break
-                        ;;
+                    1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
+                    2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
+                    3) sudo python3 install_hostapd_service.py ;;
+                    4) sudo python3 install_dnsmasq_service.py ;;
+                    5) break ;;
                 esac
             done
 
-            # Save config after exiting menu
             cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
@@ -116,7 +131,6 @@ EOF
     esac
 done
 
-# Save effective settings back to config file
 cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
@@ -128,47 +142,41 @@ check_and_install() {
     local pkg="$1"
     PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
     if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
-        echo "Installing $pkg..."
         sudo apt-get install -y "$pkg"
-    else
-        echo "$pkg is already installed."
     fi
 }
 
 if [ "$FAST_LAUNCH" = false ]; then
-    echo "Status: Checking and installing missing dependencies..."
+    print_step "Checking and installing missing dependencies"
     for pkg in "${DEPENDENCIES[@]}"; do
-        check_and_install "$pkg"
+        run_with_spinner "Installing $pkg" check_and_install "$pkg"
     done
-    echo "Status: All dependencies are installed."
 fi
 
 # Run AP setup if USE_LOCAL is false
 if [ "$USE_LOCAL" = false ]; then
-    echo "Status: Running AP mode setup with settupAP.py..."
-
+    print_step "Running AP mode setup"
     if [ "$EUID" -ne 0 ]; then
         echo "Error: This script must be run as root for AP setup."
         exit 1
     fi
 
     if [ -d "$BASE_DIR/MOnitorEnv" ]; then
-        echo "Status: Activating virtual environment..."
+        print_step "Activating virtual environment"
         source "$BASE_DIR/MOnitorEnv/bin/activate"
         if python3 "$BASE_DIR/settupAP.py"; then
             deactivate
         else
-            echo "Warn: Virtualenv execution failed, falling back to system Python..."
             deactivate
             sudo python3 "$BASE_DIR/settupAP.py"
         fi
     else
-        echo "Warn: Virtual environment not found. Running with system Python..."
         sudo python3 "$BASE_DIR/settupAP.py"
     fi
 fi
 
 # Detect IP address
+print_step "Detecting IP address"
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
@@ -183,18 +191,17 @@ fi
 echo "Detected IP: $AP_IP"
 
 # Start Apache
-echo "Launching Apache and WordPress site..."
+run_with_spinner "Starting Apache server" sudo systemctl restart apache2
 sudo systemctl enable apache2
-sudo systemctl restart apache2
 
 # Launch monitor server
-echo "Launching Flask monitor app from $MONITOR_DIR..."
+print_step "Launching Flask monitor app"
 cd "$MONITOR_DIR"
 rm -f "$LOG_FILE" "$PORT_FILE"
-
 nohup python3 app.py >> "$LOG_FILE" 2>&1 &
 
-# Wait for port to be written (timeout after 10s)
+# Wait for port to be written
+print_step "Waiting for monitor port file"
 MONITOR_PORT=""
 for i in {1..10}; do
     if [ -f "$PORT_FILE" ]; then
