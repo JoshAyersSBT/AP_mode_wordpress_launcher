@@ -143,7 +143,7 @@ wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 """)
 
-def configure_dnsmasq():
+'''def configure_dnsmasq():
     log_info("Writing dnsmasq config...")
     with open(DNSMASQ_CONF, "w") as f:
         f.write(f"""\
@@ -155,8 +155,60 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 
 # Static hostnames for local domains
 address=/learning.betabox/192.168.50.1
-address=/monitor.betabox/192.168.50.1
+address=/monitor.betabox/192.168.50.1:
+""")'''
+def configure_dnsmasq():
+    log_info("Writing dnsmasq config...")
+    with open(DNSMASQ_CONF, "w") as f:
+        f.write(f"""\
+
+# AP Mode DNSMasq Configuration
+interface={INTERFACE}
+bind-interfaces
+dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
+
+# Hijack all DNS to local IP for captive portal
+address=/#/192.168.50.1
 """)
+
+
+def configure_lighttpd_redirect():
+    log_info("Configuring lighttpd to redirect to https://learning.betabox...")
+
+    # Create redirect HTML page
+    html = """\
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="refresh" content="0; url=https://learning.betabox" />
+  </head>
+  <body>
+    Redirecting to <a href="https://learning.betabox">learning.betabox</a>...
+  </body>
+</html>
+"""
+    with open("/var/www/html/index.html", "w") as f:
+        f.write(html)
+
+    # Create redirect rule file
+    rules = """\
+$HTTP["host"] =~ ".*" {
+    url.redirect = (
+        "^/generate_204$" => "https://learning.betabox",
+        "^/success.html$" => "https://learning.betabox",
+        "^/success.txt$" => "https://learning.betabox"
+    )
+}
+"""
+    redirect_conf = "/etc/lighttpd/conf-available/99-redirect-rules.conf"
+    with open(redirect_conf, "w") as f:
+        f.write(rules)
+
+    # Enable module and restart
+    run("lighty-enable-mod redirect", check=False)
+    run(f"ln -sf {redirect_conf} /etc/lighttpd/conf-enabled/")
+    run("systemctl restart lighttpd")
+
 
 def update_etc_hosts():
     log_info("Adding local domains to /etc/hosts...")
