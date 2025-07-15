@@ -264,8 +264,8 @@ def main():
     configure_dnsmasq()
     update_etc_hosts()
     start_ap_services()
-    ensure_lighttpd_installed()
-    configure_lighttpd_redirect()
+    #ensure_lighttpd_installed()
+    #configure_lighttpd_redirect()
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
