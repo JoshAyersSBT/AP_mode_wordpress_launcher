@@ -170,6 +170,12 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 # Hijack all DNS to local IP for captive portal
 address=/#/192.168.50.1
 """)
+def ensure_lighttpd_installed():
+    try:
+        run("which lighttpd", capture_output=True)
+    except subprocess.CalledProcessError:
+        log_info("Installing lighttpd...")
+        run("apt install -y lighttpd")
 
 
 def configure_lighttpd_redirect():
@@ -257,6 +263,7 @@ def main():
     configure_dnsmasq()
     update_etc_hosts()
     start_ap_services()
+    configure_lighttpd_redirect()
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
