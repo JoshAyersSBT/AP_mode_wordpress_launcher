@@ -181,6 +181,7 @@ def ensure_lighttpd_installed():
 def configure_lighttpd_redirect():
     log_info("Configuring lighttpd to redirect to https://learning.betabox...")
 
+    os.makedirs("/var/www/html", exist_ok=True)  # Ensure directory exists
     # Create redirect HTML page
     html = """\
 <!DOCTYPE html>
@@ -263,6 +264,7 @@ def main():
     configure_dnsmasq()
     update_etc_hosts()
     start_ap_services()
+    ensure_lighttpd_installed()
     configure_lighttpd_redirect()
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
