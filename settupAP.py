@@ -147,10 +147,23 @@ def configure_dnsmasq():
     log_info("Writing dnsmasq config...")
     with open(DNSMASQ_CONF, "w") as f:
         f.write(f"""\
+
+# AP Mode DNSMasq Configuration
 interface={INTERFACE}
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
+
+# Static hostnames for local domains
+address=/learning.betabox/192.168.50.1
+address=/monitor.betabox/192.168.50.1
 """)
+
+def update_etc_hosts():
+    log_info("Adding local domains to /etc/hosts...")
+    hosts_line = "192.168.50.1 learning.betabox monitor.betabox\n"
+    with open("/etc/hosts", "a") as f:
+        f.write(hosts_line)
+
 
 def start_ap_services():
     log_info("Starting hostapd...")
@@ -190,6 +203,7 @@ def main():
     create_ap_interface()
     configure_hostapd()
     configure_dnsmasq()
+    update_etc_hosts()
     start_ap_services()
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
