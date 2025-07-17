@@ -159,6 +159,14 @@ for arg in "$@"; do
             VERBOSE=true
             echo -e "${BLUE}[INFO]${NC} Verbose mode enabled."
             ;;
+        -i|--install)
+            install_dependencies
+            exit 0
+            ;;
+        -s|--status)
+            show_status
+            exit 0
+            ;;
         --config)
             while true; do
                 CURRENT_SSID=$(awk -F= '/^SSID=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
@@ -206,31 +214,14 @@ EOF
                 esac
             done
             ;;
-        -s|--status)
-            show_status
-            exit 0
-            ;;
         *)
             echo -e "${RED}[ERROR]${NC} Unknown argument: $arg"
-            echo "Usage: $0 [--local] [--fastLaunch] [--verbose] [--config] [--status]"
+            echo "Usage: $0 [--local] [--fastLaunch] [--verbose] [--install] [--config] [--status]"
             exit 1
             ;;
     esac
-    case $arg in
-        -i|--install)
-            install_dependencies
-            exit 0
-            ;;
-        # ... other options
-    esac
 done
 
-# Save basic config settings (without SSID/passphrase) on normal run
-cat <<EOF > "$CONFIG_FILE"
-USE_LOCAL=$USE_LOCAL
-FAST_LAUNCH=$FAST_LAUNCH
-VERBOSE=$VERBOSE
-EOF
 
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
