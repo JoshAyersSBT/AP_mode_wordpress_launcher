@@ -225,8 +225,6 @@ EOF
     esac
 done
 
-done
-
 # Save basic config settings (without SSID/passphrase) on normal run
 cat <<EOF > "$CONFIG_FILE"
 USE_LOCAL=$USE_LOCAL
