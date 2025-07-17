@@ -31,13 +31,13 @@ CURRENT_STEP=0
 
 # Load settings if config file exists
 if [ -f "$CONFIG_FILE" ]; then
-    while IFS='=' read -r key val; do
+    grep -v '^\s*#' "$CONFIG_FILE" | grep '=' | while IFS='=' read -r key val; do
         case $key in
             USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
                 eval "$key=\"$val\""
                 ;;
         esac
-    done < <(grep -v '^\s*#' "$CONFIG_FILE" | grep '=')
+    done
 fi
 
 detect_distro() {
