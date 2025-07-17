@@ -35,6 +35,87 @@ fi
 TOTAL_STEPS=8
 CURRENT_STEP=0
 
+# Handle CLI arguments
+for arg in "$@"; do
+    case $arg in
+        -l|--local)
+            USE_LOCAL=true
+            echo -e "${BLUE}[INFO]${NC} Local network hosting enabled."
+            ;;
+        -f|--fastLaunch)
+            FAST_LAUNCH=true
+            echo -e "${BLUE}[INFO]${NC} Fast launch: skipping dependency checks."
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            echo -e "${BLUE}[INFO]${NC} Verbose mode enabled."
+            ;;
+        -i|--install)
+            install_dependencies
+            exit 0
+            ;;
+        -s|--status)
+            show_status
+            exit 0
+            ;;
+        --FTI)
+            full_tool_install
+            ;;
+        --config)
+            while true; do
+                CURRENT_SSID=$(awk -F= '/^SSID=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
+                CURRENT_PASS=$(awk -F= '/^WAP_PASSPHRASE=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
+
+                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
+                "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
+                "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
+                "3" "Toggle VERBOSE (Currently: $VERBOSE)" \
+                "4" "Run install_hostapd_service.py" \
+                "5" "Run install_dnsmasq_service.py" \
+                "6" "Edit SSID and WAP Passphrase" \
+                "7" "Exit config utility" 3>&1 1>&2 2>&3)
+
+                exitstatus=$?
+                if [ $exitstatus -ne 0 ]; then
+                    echo -e "${YELLOW}[WARN]${NC} Exited config."
+                    exit 0
+                fi
+
+                case $OPTION in
+                    1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
+                    2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
+                    3) VERBOSE=$( [ "$VERBOSE" = true ] && echo false || echo true ) ;;
+                    4) sudo python3 install_hostapd_service.py ;;
+                    5) sudo python3 install_dnsmasq_service.py ;;
+                    6)
+                        new_ssid=$(whiptail --inputbox "Enter new SSID (leave blank to keep current: $CURRENT_SSID):" 10 60 3>&1 1>&2 2>&3)
+                        [ -n "$new_ssid" ] && CURRENT_SSID="$new_ssid"
+
+                        new_pass=$(whiptail --inputbox "Enter new WAP Passphrase (leave blank to keep current):" 10 60 3>&1 1>&2 2>&3)
+                        [ -n "$new_pass" ] && CURRENT_PASS="$new_pass"
+                        ;;
+                    7)
+                        cat <<EOF > "$CONFIG_FILE"
+USE_LOCAL=$USE_LOCAL
+FAST_LAUNCH=$FAST_LAUNCH
+VERBOSE=$VERBOSE
+SSID=${CURRENT_SSID:-BetaBox1}
+WAP_PASSPHRASE=${CURRENT_PASS:-BetaBox1}
+EOF
+                        echo -e "${GREEN}[SUCCESS]${NC} Settings saved. If you have changed SSID or WAP_Password please restart your system."
+                        exit 0
+                        ;;
+                esac
+            done
+            ;;
+        *)
+            echo -e "${RED}[ERROR]${NC} Unknown argument: $arg"
+            echo "Usage: $0 [--local] [--fastLaunch] [--verbose] [--install] [--FTI] [--config] [--status]"
+            exit 1
+            ;;
+    esac
+done
+
 
 print_progress() {
     local message="$1"
@@ -144,86 +225,46 @@ show_status() {
     whiptail --title "PiPress Status Report" --msgbox "$STATUS_TEXT" 20 70
 }
 
-# Handle CLI arguments
-for arg in "$@"; do
-    case $arg in
-        -l|--local)
-            USE_LOCAL=true
-            echo -e "${BLUE}[INFO]${NC} Local network hosting enabled."
-            ;;
-        -f|--fastLaunch)
-            FAST_LAUNCH=true
-            echo -e "${BLUE}[INFO]${NC} Fast launch: skipping dependency checks."
-            ;;
-        -v|--verbose)
-            VERBOSE=true
-            echo -e "${BLUE}[INFO]${NC} Verbose mode enabled."
-            ;;
-        -i|--install)
-            install_dependencies
-            exit 0
-            ;;
-        -s|--status)
-            show_status
-            exit 0
-            ;;
-        --config)
-            while true; do
-                CURRENT_SSID=$(awk -F= '/^SSID=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
-                CURRENT_PASS=$(awk -F= '/^WAP_PASSPHRASE=/{print $2}' "$CONFIG_FILE" 2>/dev/null)
-
-                OPTION=$(whiptail --title "PiPress Config Utility" --menu "Select an option:" 20 70 10 \
-                "1" "Toggle USE_LOCAL (Currently: $USE_LOCAL)" \
-                "2" "Toggle FAST_LAUNCH (Currently: $FAST_LAUNCH)" \
-                "3" "Toggle VERBOSE (Currently: $VERBOSE)" \
-                "4" "Run install_hostapd_service.py" \
-                "5" "Run install_dnsmasq_service.py" \
-                "6" "Edit SSID and WAP Passphrase" \
-                "7" "Exit config utility" 3>&1 1>&2 2>&3)
-
-                exitstatus=$?
-                if [ $exitstatus -ne 0 ]; then
-                    echo -e "${YELLOW}[WARN]${NC} Exited config."
-                    exit 0
-                fi
-
-                case $OPTION in
-                    1) USE_LOCAL=$( [ "$USE_LOCAL" = true ] && echo false || echo true ) ;;
-                    2) FAST_LAUNCH=$( [ "$FAST_LAUNCH" = true ] && echo false || echo true ) ;;
-                    3) VERBOSE=$( [ "$VERBOSE" = true ] && echo false || echo true ) ;;
-                    4) sudo python3 install_hostapd_service.py ;;
-                    5) sudo python3 install_dnsmasq_service.py ;;
-                    6)
-                        new_ssid=$(whiptail --inputbox "Enter new SSID (leave blank to keep current: $CURRENT_SSID):" 10 60 3>&1 1>&2 2>&3)
-                        [ -n "$new_ssid" ] && CURRENT_SSID="$new_ssid"
-
-                        new_pass=$(whiptail --inputbox "Enter new WAP Passphrase (leave blank to keep current):" 10 60 3>&1 1>&2 2>&3)
-                        [ -n "$new_pass" ] && CURRENT_PASS="$new_pass"
-                        ;;
-                    7)
-                        cat <<EOF > "$CONFIG_FILE"
-USE_LOCAL=$USE_LOCAL
-FAST_LAUNCH=$FAST_LAUNCH
-VERBOSE=$VERBOSE
-SSID=${CURRENT_SSID:-BetaBox1}
-WAP_PASSPHRASE=${CURRENT_PASS:-BetaBox1}
-EOF
-                        echo -e "${GREEN}[SUCCESS]${NC} Settings saved. If you have changed SSID or WAP_Password please restart your system."
-                        exit 0
-                        ;;
-                esac
-            done
-            ;;
-        *)
-            echo -e "${RED}[ERROR]${NC} Unknown argument: $arg"
-            echo "Usage: $0 [--local] [--fastLaunch] [--verbose] [--install] [--config] [--status]"
-            exit 1
-            ;;
-    esac
-done
-
-
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
+
+
+full_tool_install() {
+    echo -e "${BLUE}[*] Performing full tool initialization (--FTI)...${NC}"
+
+    ENV_DIR="$BASE_DIR/MOnitorEnv"
+    REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
+
+    # Check and create virtual environment if missing
+    if [ ! -d "$ENV_DIR" ] || [ ! -f "$ENV_DIR/bin/activate" ]; then
+        echo -e "${BLUE}[*] Creating Python virtual environment at $ENV_DIR...${NC}"
+        python3 -m venv "$ENV_DIR"
+    else
+        echo -e "${GREEN}[*] Virtual environment already exists. Skipping creation.${NC}"
+    fi
+
+    # Activate environment
+    echo -e "${BLUE}[*] Activating virtual environment...${NC}"
+    source "$ENV_DIR/bin/activate"
+
+    echo -e "${BLUE}[*] Installing/upgrading pip and Python dependencies...${NC}"
+    python3 -m pip install --upgrade pip
+
+    if [ -f "$REQUIREMENTS_FILE" ]; then
+        python3 -m pip install -r "$REQUIREMENTS_FILE"
+    else
+        echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
+    fi
+
+    echo -e "${BLUE}[*] Running setup scripts in environment...${NC}"
+    python3 "$BASE_DIR/install_hostapd_service.py"
+    python3 "$BASE_DIR/install_dnsmasq_service.py"
+    python3 "$BASE_DIR/install_startup_daemon.py"
+
+    deactivate
+    echo -e "${GREEN}[done] Full tool installation complete.${NC}"
+    exit 0
+}
+
 
 check_and_install() {
     local pkg="$1"
