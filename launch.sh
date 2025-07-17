@@ -35,6 +35,7 @@ fi
 TOTAL_STEPS=8
 CURRENT_STEP=0
 
+
 print_progress() {
     local message="$1"
     CURRENT_STEP=$((CURRENT_STEP + 1))
@@ -56,6 +57,62 @@ maybe_run() {
 }
 
 tput civis
+
+install_dependencies() {
+    echo -e "${BLUE}[*] Checking and installing system dependencies...${NC}"
+
+    DEPENDENCIES=(
+        apache2 php libapache2-mod-php php-mysql mariadb-server
+        hostapd dnsmasq iptables curl wget dnsutils net-tools
+        python3 python3-pip python3-venv
+    )
+
+    # Detect package manager
+    if command -v apt-get &>/dev/null; then
+        PKG_MANAGER="apt-get"
+        UPDATE_CMD="sudo apt-get update"
+        INSTALL_CMD="sudo apt-get install -y"
+    elif command -v pacman &>/dev/null; then
+        PKG_MANAGER="pacman"
+        UPDATE_CMD="sudo pacman -Sy"
+        INSTALL_CMD="sudo pacman -S --noconfirm"
+    else
+        echo -e "${RED}[error] Unsupported package manager. Only apt and pacman are supported.${NC}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}[*] Using $PKG_MANAGER to install system packages...${NC}"
+    eval "$UPDATE_CMD"
+
+    for pkg in "${DEPENDENCIES[@]}"; do
+        if [[ "$PKG_MANAGER" == "apt-get" ]]; then
+            if ! dpkg -s "$pkg" &>/dev/null; then
+                echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
+                eval "$INSTALL_CMD $pkg"
+            else
+                echo -e "${GREEN}[installed] $pkg${NC}"
+            fi
+        elif [[ "$PKG_MANAGER" == "pacman" ]]; then
+            if ! pacman -Q "$pkg" &>/dev/null; then
+                echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
+                eval "$INSTALL_CMD $pkg"
+            else
+                echo -e "${GREEN}[installed] $pkg${NC}"
+            fi
+        fi
+    done
+
+    # Install Python packages
+    if [[ -f "requirements.txt" ]]; then
+        echo -e "${BLUE}[*] Installing Python dependencies from requirements.txt...${NC}"
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r requirements.txt
+    else
+        echo -e "${YELLOW}[warn] No requirements.txt found. Skipping Python package installation.${NC}"
+    fi
+
+    echo -e "${GREEN}[done] All dependencies are up to date.${NC}"
+}
 
 show_status() {
     launch_pid=$(pgrep -f "bash .*launch.sh" | grep -v $$ || true)
@@ -159,6 +216,15 @@ EOF
             exit 1
             ;;
     esac
+    case $arg in
+        -i|--install)
+            install_dependencies
+            exit 0
+            ;;
+        # ... other options
+    esac
+done
+
 done
 
 # Save basic config settings (without SSID/passphrase) on normal run
