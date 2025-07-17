@@ -190,10 +190,20 @@ full_tool_install() {
 check_and_install() {
     local pkg="$1"
     PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
+
     if [[ "$PKG_STATUS" != *"install ok installed"* ]]; then
+        echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
         maybe_run sudo apt-get install -y "$pkg"
+        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+            echo -e "${GREEN}[installed] $pkg successfully installed.${NC}"
+        else
+            echo -e "${RED}[error] Failed to install $pkg.${NC}"
+        fi
+    else
+        echo -e "${GREEN}[installed] $pkg already present.${NC}"
     fi
 }
+
 
 if [ "$FAST_LAUNCH" = false ]; then
     print_progress "Installing dependencies"
