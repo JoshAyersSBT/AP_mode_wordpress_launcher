@@ -31,14 +31,22 @@ CURRENT_STEP=0
 
 # Load settings if config file exists
 if [ -f "$CONFIG_FILE" ]; then
-    grep -v '^\s*#' "$CONFIG_FILE" | grep '=' | while IFS='=' read -r key val; do
-        case $key in
-            USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
-                eval "$key=\"$val\""
+    while read -r line; do
+        case "$line" in
+            \#*|'') continue ;;
+            *)
+                key="${line%%=*}"
+                val="${line#*=}"
+                case "$key" in
+                    USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
+                        eval "$key=\"$val\""
+                        ;;
+                esac
                 ;;
         esac
-    done
+    done < "$CONFIG_FILE"
 fi
+
 
 detect_distro() {
     if grep -qi 'arch' /etc/os-release; then
