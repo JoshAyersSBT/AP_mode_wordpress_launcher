@@ -269,4 +269,7 @@ def main():
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        log_error(f"Unexpected crash: {e}")
