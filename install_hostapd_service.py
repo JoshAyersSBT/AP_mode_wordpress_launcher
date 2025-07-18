@@ -29,11 +29,15 @@ def run(cmd, check=True):
     status(f"Running: {cmd}", "INFO")
     subprocess.run(cmd, shell=True, check=check)
 
+
 def write_hostapd_conf():
     status(f"Writing hostapd config to {HOSTAPD_CONF}...", "INFO")
+
     if not 8 <= len(PASSWORD) <= 63:
         status("WPA password must be 8–63 characters.", "ERROR")
         sys.exit(1)
+
+    os.makedirs(os.path.dirname(HOSTAPD_CONF), exist_ok=True)  # ← Add this line
 
     with open(HOSTAPD_CONF, "w") as f:
         f.write(f"""\
