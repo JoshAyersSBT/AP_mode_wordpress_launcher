@@ -166,49 +166,73 @@ check_and_install() {
     fi
 }
 update_tool() {
-    echo -e "${BLUE}[*] Fetching latest version of AP_mode_wordpress_launcher from GitHub...${NC}"
+    echo -e "${BLUE}[*] Updating AP Mode WordPress Launcher from GitHub...${NC}"
 
-    TMP_DIR="/tmp/AP_mode_wordpress_launcher_update"
+    TOOL_DIR="/AP_mode_wordpress_launcher"
     REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
 
-    echo -e "${YELLOW}[*] Cloning latest code to temporary directory...${NC}"
+    # Prevent recursion if already inside an FTI-based clone
+    if [ "$(pwd)" = "$TOOL_DIR" ]; then
+        echo -e "${YELLOW}[WARN] Already running from updated tool directory ($TOOL_DIR). Skipping re-clone.${NC}"
+        echo -e "${BLUE}[*] Running full tool install...${NC}"
+        "$TOOL_DIR/launch.sh" --FTI
+        exit 0
+    fi
+
+    TMP_DIR="/tmp/AP_mode_wordpress_launcher_update"
+    echo -e "${YELLOW}[*] Cloning latest repo to temporary directory...${NC}"
     rm -rf "$TMP_DIR"
     git clone --depth=1 "$REPO_URL" "$TMP_DIR"
 
     if [ $? -ne 0 ]; then
-        echo -e "${RED}[ERROR]${NC} Failed to clone repository. Check your network or repo URL."
+        echo -e "${RED}[ERROR] Failed to clone repository. Aborting.${NC}"
         exit 1
     fi
 
-    echo -e "${YELLOW}[*] Backing up current launcher directory...${NC}"
-    BACKUP_DIR="${BASE_DIR}_backup_$(date +%Y%m%d%H%M%S)"
-    cp -r "$BASE_DIR" "$BACKUP_DIR"
+    echo -e "${YELLOW}[*] Replacing existing tool at $TOOL_DIR...${NC}"
+    rm -rf "$TOOL_DIR"
+    mv "$TMP_DIR" "$TOOL_DIR"
 
-    echo -e "${YELLOW}[*] Updating files in $BASE_DIR...${NC}"
-    rsync -a --delete --exclude ".git" "$TMP_DIR/" "$BASE_DIR/"
-
-    echo -e "${GREEN}[SUCCESS]${NC} Tool updated. Running --FTI to finalize setup..."
-    rm -rf "$TMP_DIR"
-    "$BASE_DIR/launch.sh" --FTI
+    echo -e "${GREEN}[SUCCESS]${NC} Update complete. Running --FTI..."
+    "$TOOL_DIR/launch.sh" --FTI
     exit 0
 }
+
 
 
 full_tool_install() {
     echo -e "${BLUE}[*] Performing full tool initialization (--FTI)...${NC}"
 
+    # --- Step 0: Clone from GitHub into /
+    TOOL_DIR="/AP_mode_wordpress_launcher"
+    REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
+
+    echo -e "${BLUE}[*] Cloning latest version of the tool from GitHub into / ...${NC}"
+    if [ -d "$TOOL_DIR" ]; then
+        echo -e "${YELLOW}[*] Removing existing $TOOL_DIR...${NC}"
+        rm -rf "$TOOL_DIR"
+    fi
+
+    git clone --depth=1 "$REPO_URL" "$TOOL_DIR"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}[ERROR] Failed to clone the repository. Aborting.${NC}"
+        exit 1
+    fi
+
+    cd "$TOOL_DIR" || exit 1
+    BASE_DIR="$TOOL_DIR"
     ENV_DIR="$BASE_DIR/MOnitorEnv"
     REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
 
-    # --- Step 1: Install system dependencies (includes apache2, php, etc.)
+    # --- Step 1: Install core system packages
     echo -e "${BLUE}[*] Installing required system packages...${NC}"
-    DEPENDENCIES=(
+    FTI_DEPENDENCIES=(
         apache2 php libapache2-mod-php php-mysql mariadb-server
         hostapd dnsmasq iptables curl wget dnsutils net-tools
         python3 python3-pip python3-venv
     )
 
-    for pkg in "${DEPENDENCIES[@]}"; do
+    for pkg in "${FTI_DEPENDENCIES[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
             apt-get install -y "$pkg"
@@ -217,7 +241,7 @@ full_tool_install() {
         fi
     done
 
-    # --- Step 2: Remove and recreate the virtual environment
+    # --- Step 2: Rebuild the Python virtual environment
     if [ -d "$ENV_DIR" ]; then
         echo -e "${YELLOW}[*] Removing existing virtual environment at $ENV_DIR...${NC}"
         rm -rf "$ENV_DIR"
@@ -226,11 +250,10 @@ full_tool_install() {
     echo -e "${BLUE}[*] Creating fresh Python virtual environment at $ENV_DIR...${NC}"
     python3 -m venv "$ENV_DIR"
 
-    # --- Step 3: Activate virtualenv and install Python packages
     echo -e "${BLUE}[*] Activating virtual environment...${NC}"
     source "$ENV_DIR/bin/activate"
 
-    echo -e "${BLUE}[*] Installing/upgrading pip and Python dependencies...${NC}"
+    echo -e "${BLUE}[*] Installing Python dependencies...${NC}"
     python3 -m pip install --upgrade pip --break-system-packages
 
     if [ -f "$REQUIREMENTS_FILE" ]; then
@@ -239,18 +262,20 @@ full_tool_install() {
         echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
     fi
 
-    # --- Step 4: Run setup scripts
-    echo -e "${BLUE}[*] Running setup scripts in environment...${NC}"
+    # --- Step 3: Run setup scripts
+    echo -e "${BLUE}[*] Running setup scripts...${NC}"
     python3 "$BASE_DIR/install_hostapd_service.py"
     python3 "$BASE_DIR/install_dnsmasq_service.py"
     python3 "$BASE_DIR/install_startup_daemon.py"
 
     deactivate
-    echo -e "${GREEN}[done] Full tool installation complete.${NC}"
+
+    # --- Step 4: Run configuration UI
+    echo -e "${BLUE}[*] Launching configuration utility...${NC}"
+    "$BASE_DIR/launch.sh" --config
+
     exit 0
 }
-
-
 
 
 if [ "$FAST_LAUNCH" = false ]; then
