@@ -165,6 +165,33 @@ check_and_install() {
         echo -e "${GREEN}[installed] $pkg already present.${NC}"
     fi
 }
+update_tool() {
+    echo -e "${BLUE}[*] Fetching latest version of AP_mode_wordpress_launcher from GitHub...${NC}"
+
+    TMP_DIR="/tmp/AP_mode_wordpress_launcher_update"
+    REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
+
+    echo -e "${YELLOW}[*] Cloning latest code to temporary directory...${NC}"
+    rm -rf "$TMP_DIR"
+    git clone --depth=1 "$REPO_URL" "$TMP_DIR"
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}[ERROR]${NC} Failed to clone repository. Check your network or repo URL."
+        exit 1
+    fi
+
+    echo -e "${YELLOW}[*] Backing up current launcher directory...${NC}"
+    BACKUP_DIR="${BASE_DIR}_backup_$(date +%Y%m%d%H%M%S)"
+    cp -r "$BASE_DIR" "$BACKUP_DIR"
+
+    echo -e "${YELLOW}[*] Updating files in $BASE_DIR...${NC}"
+    rsync -a --delete --exclude ".git" "$TMP_DIR/" "$BASE_DIR/"
+
+    echo -e "${GREEN}[SUCCESS]${NC} Tool updated. Running --FTI to finalize setup..."
+    rm -rf "$TMP_DIR"
+    "$BASE_DIR/launch.sh" --FTI
+    exit 0
+}
 
 
 full_tool_install() {
@@ -273,6 +300,9 @@ for arg in "$@"; do
             ;;
         --FTI)
             full_tool_install
+            ;;
+        --update)
+            update_tool
             ;;
         --config)
             while true; do
