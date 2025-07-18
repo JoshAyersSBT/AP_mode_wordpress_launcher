@@ -155,23 +155,24 @@ full_tool_install() {
     ENV_DIR="$BASE_DIR/MOnitorEnv"
     REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
 
-    # Check and create virtual environment if missing
-    if [ ! -d "$ENV_DIR" ] || [ ! -f "$ENV_DIR/bin/activate" ]; then
-        echo -e "${BLUE}[*] Creating Python virtual environment at $ENV_DIR...${NC}"
-        python3 -m venv "$ENV_DIR"
-    else
-        echo -e "${GREEN}[*] Virtual environment already exists. Skipping creation.${NC}"
+    # Remove and recreate virtual environment
+    if [ -d "$ENV_DIR" ]; then
+        echo -e "${YELLOW}[*] Removing existing virtual environment at $ENV_DIR...${NC}"
+        rm -rf "$ENV_DIR"
     fi
+
+    echo -e "${BLUE}[*] Creating fresh Python virtual environment at $ENV_DIR...${NC}"
+    python3 -m venv "$ENV_DIR"
 
     # Activate environment
     echo -e "${BLUE}[*] Activating virtual environment...${NC}"
     source "$ENV_DIR/bin/activate"
 
     echo -e "${BLUE}[*] Installing/upgrading pip and Python dependencies...${NC}"
-    python3 -m pip install --upgrade pip
+    python3 -m pip install --upgrade pip --break-system-packages
 
     if [ -f "$REQUIREMENTS_FILE" ]; then
-        python3 -m pip install -r "$REQUIREMENTS_FILE"
+        python3 -m pip install --break-system-packages -r "$REQUIREMENTS_FILE"
     else
         echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
     fi
@@ -185,6 +186,7 @@ full_tool_install() {
     echo -e "${GREEN}[done] Full tool installation complete.${NC}"
     exit 0
 }
+
 
 
 check_and_install() {
