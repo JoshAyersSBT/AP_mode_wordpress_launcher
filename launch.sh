@@ -149,46 +149,6 @@ show_status() {
 DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
 
-full_tool_install() {
-    echo -e "${BLUE}[*] Performing full tool initialization (--FTI)...${NC}"
-
-    ENV_DIR="$BASE_DIR/MOnitorEnv"
-    REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
-
-    # Remove and recreate virtual environment
-    if [ -d "$ENV_DIR" ]; then
-        echo -e "${YELLOW}[*] Removing existing virtual environment at $ENV_DIR...${NC}"
-        rm -rf "$ENV_DIR"
-    fi
-
-    echo -e "${BLUE}[*] Creating fresh Python virtual environment at $ENV_DIR...${NC}"
-    python3 -m venv "$ENV_DIR"
-
-    # Activate environment
-    echo -e "${BLUE}[*] Activating virtual environment...${NC}"
-    source "$ENV_DIR/bin/activate"
-
-    echo -e "${BLUE}[*] Installing/upgrading pip and Python dependencies...${NC}"
-    python3 -m pip install --upgrade pip --break-system-packages
-
-    if [ -f "$REQUIREMENTS_FILE" ]; then
-        python3 -m pip install --break-system-packages -r "$REQUIREMENTS_FILE"
-    else
-        echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
-    fi
-
-    echo -e "${BLUE}[*] Running setup scripts in environment...${NC}"
-    python3 "$BASE_DIR/install_hostapd_service.py"
-    python3 "$BASE_DIR/install_dnsmasq_service.py"
-    python3 "$BASE_DIR/install_startup_daemon.py"
-
-    deactivate
-    echo -e "${GREEN}[done] Full tool installation complete.${NC}"
-    exit 0
-}
-
-
-
 check_and_install() {
     local pkg="$1"
     PKG_STATUS=$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)
@@ -205,6 +165,65 @@ check_and_install() {
         echo -e "${GREEN}[installed] $pkg already present.${NC}"
     fi
 }
+
+
+full_tool_install() {
+    echo -e "${BLUE}[*] Performing full tool initialization (--FTI)...${NC}"
+
+    ENV_DIR="$BASE_DIR/MOnitorEnv"
+    REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
+
+    # --- Step 1: Install system dependencies (includes apache2, php, etc.)
+    echo -e "${BLUE}[*] Installing required system packages...${NC}"
+    DEPENDENCIES=(
+        apache2 php libapache2-mod-php php-mysql mariadb-server
+        hostapd dnsmasq iptables curl wget dnsutils net-tools
+        python3 python3-pip python3-venv
+    )
+
+    for pkg in "${DEPENDENCIES[@]}"; do
+        if ! dpkg -s "$pkg" &> /dev/null; then
+            echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
+            apt-get install -y "$pkg"
+        else
+            echo -e "${GREEN}[installed] $pkg${NC}"
+        fi
+    done
+
+    # --- Step 2: Remove and recreate the virtual environment
+    if [ -d "$ENV_DIR" ]; then
+        echo -e "${YELLOW}[*] Removing existing virtual environment at $ENV_DIR...${NC}"
+        rm -rf "$ENV_DIR"
+    fi
+
+    echo -e "${BLUE}[*] Creating fresh Python virtual environment at $ENV_DIR...${NC}"
+    python3 -m venv "$ENV_DIR"
+
+    # --- Step 3: Activate virtualenv and install Python packages
+    echo -e "${BLUE}[*] Activating virtual environment...${NC}"
+    source "$ENV_DIR/bin/activate"
+
+    echo -e "${BLUE}[*] Installing/upgrading pip and Python dependencies...${NC}"
+    python3 -m pip install --upgrade pip --break-system-packages
+
+    if [ -f "$REQUIREMENTS_FILE" ]; then
+        python3 -m pip install --break-system-packages -r "$REQUIREMENTS_FILE"
+    else
+        echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
+    fi
+
+    # --- Step 4: Run setup scripts
+    echo -e "${BLUE}[*] Running setup scripts in environment...${NC}"
+    python3 "$BASE_DIR/install_hostapd_service.py"
+    python3 "$BASE_DIR/install_dnsmasq_service.py"
+    python3 "$BASE_DIR/install_startup_daemon.py"
+
+    deactivate
+    echo -e "${GREEN}[done] Full tool installation complete.${NC}"
+    exit 0
+}
+
+
 
 
 if [ "$FAST_LAUNCH" = false ]; then
