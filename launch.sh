@@ -220,9 +220,9 @@ if [ "$USE_LOCAL" = false ]; then
 
     print_progress "Running AP mode setup"
     if [ -d "$BASE_DIR/MOnitorEnv" ]; then
-        maybe_run bash -c "source \"$BASE_DIR/MOnitorEnv/bin/activate\" && python3 \"$BASE_DIR/settupAP.py\" && deactivate"
+        maybe_run bash -c "source \"$BASE_DIR/MOnitorEnv/bin/activate\" && python3 \"$BASE_DIR/setupAP.py\" && deactivate"
     else
-        maybe_run sudo python3 "$BASE_DIR/settupAP.py"
+        maybe_run sudo python3 "$BASE_DIR/setupAP.py"
     fi
 fi
 
