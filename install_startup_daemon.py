@@ -20,10 +20,10 @@ def status(msg, level="INFO"):
 
 user = getpass.getuser()
 home_dir = str(Path.home())
-launcher_dir = os.path.join(home_dir, "AP_mode_wordpress_launcher")
+launcher_dir = "/AP_mode_wordpress_launcher"
 launch_script = "/AP_mode_wordpress_launcher/launch.sh"
-config_file = os.path.join(launcher_dir, "launch_settings.conf")
-check_script = os.path.join(launcher_dir, "conditional_launch.sh")
+config_file = "/AP_mode_wordpress_launcher/launch_settings.conf"
+check_script = "/AP_mode_wordpress_launcher/conditional_launch.sh"
 service_name = "apmode-launcher"
 service_file = f"/etc/systemd/system/{service_name}.service"
 
