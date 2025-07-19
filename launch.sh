@@ -230,40 +230,37 @@ update_tool() {
     exit 0
 }
 
-
-
 full_tool_install() {
     echo -e "${BLUE}[*] Performing full tool initialization (--FTI)...${NC}"
 
-    # --- Step 0: Clone from GitHub into /
     TOOL_DIR="/AP_mode_wordpress_launcher"
     REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
+    TMP_DIR="/tmp/AP_mode_wordpress_launcher_tmp"
+    ENV_DIR="$TOOL_DIR/MOnitorEnv"
+    REQUIREMENTS_FILE="$TOOL_DIR/requirements.txt"
 
-    echo -e "${BLUE}[*] Cloning latest version of the tool from GitHub into / ...${NC}"
-    if [ -d "$TOOL_DIR" ]; then
-        echo -e "${YELLOW}[*] Removing existing $TOOL_DIR...${NC}"
-        rm -rf "$TOOL_DIR"
-    fi
-
-    git clone --depth=1 "$REPO_URL" "$TOOL_DIR"
+    # --- Step 1: Clone latest repo to temporary location
+    echo -e "${BLUE}[*] Cloning latest version of the tool from GitHub into temporary directory...${NC}"
+    rm -rf "$TMP_DIR"
+    git clone --depth=1 "$REPO_URL" "$TMP_DIR"
     if [ $? -ne 0 ]; then
         echo -e "${RED}[ERROR] Failed to clone the repository. Aborting.${NC}"
         exit 1
     fi
 
+    # --- Step 2: Move into final location
+    echo -e "${YELLOW}[*] Replacing existing install at $TOOL_DIR...${NC}"
+    rm -rf "$TOOL_DIR"
+    mv "$TMP_DIR" "$TOOL_DIR"
     cd "$TOOL_DIR" || exit 1
-    BASE_DIR="$TOOL_DIR"
-    ENV_DIR="$BASE_DIR/MOnitorEnv"
-    REQUIREMENTS_FILE="$BASE_DIR/requirements.txt"
 
-    # --- Step 1: Install core system packages
+    # --- Step 3: Install required system packages
     echo -e "${BLUE}[*] Installing required system packages...${NC}"
     FTI_DEPENDENCIES=(
         apache2 php libapache2-mod-php php-mysql mariadb-server
         hostapd dnsmasq iptables curl wget dnsutils net-tools
         python3 python3-pip python3-venv
     )
-
     for pkg in "${FTI_DEPENDENCIES[@]}"; do
         if ! dpkg -s "$pkg" &> /dev/null; then
             echo -e "${YELLOW}[missing] Installing $pkg...${NC}"
@@ -273,7 +270,7 @@ full_tool_install() {
         fi
     done
 
-    # --- Step 2: Rebuild the Python virtual environment
+    # --- Step 4: Rebuild the virtual environment
     if [ -d "$ENV_DIR" ]; then
         echo -e "${YELLOW}[*] Removing existing virtual environment at $ENV_DIR...${NC}"
         rm -rf "$ENV_DIR"
@@ -294,21 +291,20 @@ full_tool_install() {
         echo -e "${YELLOW}[warn] requirements.txt not found. Skipping Python package installation.${NC}"
     fi
 
-    # --- Step 3: Run setup scripts
+    # --- Step 5: Run setup scripts
     echo -e "${BLUE}[*] Running setup scripts...${NC}"
-    python3 "$BASE_DIR/install_hostapd_service.py"
-    python3 "$BASE_DIR/install_dnsmasq_service.py"
-    python3 "$BASE_DIR/install_startup_daemon.py"
+    python3 "$TOOL_DIR/install_hostapd_service.py"
+    python3 "$TOOL_DIR/install_dnsmasq_service.py"
+    python3 "$TOOL_DIR/install_startup_daemon.py"
 
     deactivate
 
-    # --- Step 4: Run configuration UI
+    # --- Step 6: Launch configuration UI
     echo -e "${BLUE}[*] Launching configuration utility...${NC}"
-    "$BASE_DIR/launch.sh" --config
+    "$TOOL_DIR/launch.sh" --config
 
     exit 0
 }
-
 
 if [ "$FAST_LAUNCH" = false ]; then
     print_progress "Installing dependencies"
