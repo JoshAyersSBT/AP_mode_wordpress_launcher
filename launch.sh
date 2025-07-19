@@ -3,6 +3,25 @@
 # PiPress Launch Script with AP-STA Mode Support + Configurable Settings
 
 set -e
+# --- Auto-bootstrap if outside /AP_mode_wordpress_launcher or missing files ---
+EXPECTED_DIR="/AP_mode_wordpress_launcher"
+NEEDED_FILES=("launch.sh" "setupAP.py" "launch_settings.conf")
+
+if [ "$PWD" != "$EXPECTED_DIR" ]; then
+    echo -e "\033[1;33m[WARN]\033[0m Running from unexpected directory: $PWD"
+    echo -e "\033[1;34m[INFO]\033[0m Attempting to bootstrap with --FTI into $EXPECTED_DIR..."
+    bash <(curl -s https://raw.githubusercontent.com/JoshAyersSBT/AP_mode_wordpress_launcher/main/launch.sh) --FTI
+    exit 0
+fi
+
+for file in "${NEEDED_FILES[@]}"; do
+    if [ ! -f "$EXPECTED_DIR/$file" ]; then
+        echo -e "\033[1;33m[WARN]\033[0m Required file missing: $file"
+        echo -e "\033[1;34m[INFO]\033[0m Attempting to repair installation with --FTI..."
+        "$EXPECTED_DIR/launch.sh" --FTI
+        exit 0
+    fi
+done
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 MONITOR_DIR="$BASE_DIR/monitor"
@@ -379,26 +398,6 @@ EOF
             exit 1
             ;;
     esac
-done
-
-# --- Auto-bootstrap if outside /AP_mode_wordpress_launcher or missing files ---
-EXPECTED_DIR="/AP_mode_wordpress_launcher"
-NEEDED_FILES=("launch.sh" "setupAP.py" "launch_settings.conf")
-
-if [ "$PWD" != "$EXPECTED_DIR" ]; then
-    echo -e "\033[1;33m[WARN]\033[0m Running from unexpected directory: $PWD"
-    echo -e "\033[1;34m[INFO]\033[0m Attempting to bootstrap with --FTI into $EXPECTED_DIR..."
-    bash <(curl -s https://raw.githubusercontent.com/JoshAyersSBT/AP_mode_wordpress_launcher/main/launch.sh) --FTI
-    exit 0
-fi
-
-for file in "${NEEDED_FILES[@]}"; do
-    if [ ! -f "$EXPECTED_DIR/$file" ]; then
-        echo -e "\033[1;33m[WARN]\033[0m Required file missing: $file"
-        echo -e "\033[1;34m[INFO]\033[0m Attempting to repair installation with --FTI..."
-        "$EXPECTED_DIR/launch.sh" --FTI
-        exit 0
-    fi
 done
 
 print_progress "Detecting IP address"
