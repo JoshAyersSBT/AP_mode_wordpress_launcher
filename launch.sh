@@ -3,40 +3,38 @@
 # PiPress Launch Script with AP-STA Mode Support + Configurable Settings
 
 set -e
+
 # --- Auto-bootstrap if outside /AP_mode_wordpress_launcher or missing files ---
 EXPECTED_DIR="/AP_mode_wordpress_launcher"
 NEEDED_FILES=("launch.sh" "setupAP.py" "launch_settings.conf")
+REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
 
-# Not in the right place? Clone and run there
+# If not in the right location, clone fresh and re-launch
 if [ "$PWD" != "$EXPECTED_DIR" ]; then
     echo -e "\033[1;33m[WARN]\033[0m Running from unexpected directory: $PWD"
-    echo -e "\033[1;34m[INFO]\033[0m Bootstrapping to $EXPECTED_DIR..."
+    echo -e "\033[1;34m[INFO]\033[0m Bootstrapping project to $EXPECTED_DIR..."
 
-    REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
-    
-    # Clone fresh copy
     sudo rm -rf "$EXPECTED_DIR"
     git clone --depth=1 "$REPO_URL" "$EXPECTED_DIR"
 
     if [ $? -ne 0 ]; then
-        echo -e "\033[1;31m[ERROR]\033[0m Failed to clone repository."
+        echo -e "\033[1;31m[ERROR]\033[0m Failed to clone repository from GitHub."
         exit 1
     fi
 
-    # Execute in correct location
     echo -e "\033[1;34m[INFO]\033[0m Launching from cloned directory..."
-    cd "$EXPECTED_DIR"
     exec sudo bash "$EXPECTED_DIR/launch.sh" --FTI
 fi
 
-# If files are missing inside correct dir, repair it
+# If in correct directory but files are missing, repair with --FTI
 for file in "${NEEDED_FILES[@]}"; do
     if [ ! -f "$EXPECTED_DIR/$file" ]; then
-        echo -e "\033[1;33m[WARN]\033[0m Required file missing: $file"
-        echo -e "\033[1;34m[INFO]\033[0m Repairing installation with --FTI..."
+        echo -e "\033[1;33m[WARN]\033[0m Missing required file: $file"
+        echo -e "\033[1;34m[INFO]\033[0m Reinstalling using --FTI..."
         exec sudo bash "$EXPECTED_DIR/launch.sh" --FTI
     fi
 done
+
 
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
