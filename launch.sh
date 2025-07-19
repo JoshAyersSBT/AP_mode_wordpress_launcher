@@ -7,21 +7,37 @@ set -e
 EXPECTED_DIR="/AP_mode_wordpress_launcher"
 NEEDED_FILES=("launch.sh" "setupAP.py" "launch_settings.conf")
 
+# Not in the right place? Clone and run there
 if [ "$PWD" != "$EXPECTED_DIR" ]; then
     echo -e "\033[1;33m[WARN]\033[0m Running from unexpected directory: $PWD"
-    echo -e "\033[1;34m[INFO]\033[0m Attempting to bootstrap with --FTI into $EXPECTED_DIR..."
-    bash <(curl -s https://raw.githubusercontent.com/JoshAyersSBT/AP_mode_wordpress_launcher/main/launch.sh) --FTI
-    exit 0
+    echo -e "\033[1;34m[INFO]\033[0m Bootstrapping to $EXPECTED_DIR..."
+
+    REPO_URL="https://github.com/JoshAyersSBT/AP_mode_wordpress_launcher.git"
+    
+    # Clone fresh copy
+    sudo rm -rf "$EXPECTED_DIR"
+    git clone --depth=1 "$REPO_URL" "$EXPECTED_DIR"
+
+    if [ $? -ne 0 ]; then
+        echo -e "\033[1;31m[ERROR]\033[0m Failed to clone repository."
+        exit 1
+    fi
+
+    # Execute in correct location
+    echo -e "\033[1;34m[INFO]\033[0m Launching from cloned directory..."
+    cd "$EXPECTED_DIR"
+    exec sudo bash "$EXPECTED_DIR/launch.sh" --FTI
 fi
 
+# If files are missing inside correct dir, repair it
 for file in "${NEEDED_FILES[@]}"; do
     if [ ! -f "$EXPECTED_DIR/$file" ]; then
         echo -e "\033[1;33m[WARN]\033[0m Required file missing: $file"
-        echo -e "\033[1;34m[INFO]\033[0m Attempting to repair installation with --FTI..."
-        "$EXPECTED_DIR/launch.sh" --FTI
-        exit 0
+        echo -e "\033[1;34m[INFO]\033[0m Repairing installation with --FTI..."
+        exec sudo bash "$EXPECTED_DIR/launch.sh" --FTI
     fi
 done
+
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 MONITOR_DIR="$BASE_DIR/monitor"
