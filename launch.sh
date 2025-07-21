@@ -4,7 +4,7 @@
 
 
 source "$(dirname "$0")/launch_Utilities.sh"
-source "$(dirname "$0")/Full_Tool_Install_Utilities.sh"
+source "$(dirname "$0")/Full_Tool_Install_utilities.sh"
 
 
 set -e
