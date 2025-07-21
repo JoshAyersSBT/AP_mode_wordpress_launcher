@@ -1,7 +1,7 @@
 import subprocess
 import os
 import sys
-from utils.status import log_info, log_success, log_warn, log_error  # Shared status functions
+from status import log_info, log_success, log_warn, log_error  # Shared status functions
 
 DNSMASQ_CONF = "/etc/dnsmasq.uap0.conf"
 SYSTEMD_UNIT = "/etc/systemd/system/dnsmasq@.service"
