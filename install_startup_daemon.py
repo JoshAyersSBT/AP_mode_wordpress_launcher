@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 import getpass
-from status import log_info, log_success, log_warn, log_error
+from status import log_info, log_success, log_warn, log_error , status  # ← Use centralized status logging
 
 user = getpass.getuser()
 home_dir = str(Path.home())
@@ -14,7 +14,7 @@ service_name = "apmode-launcher"
 service_file = f"/etc/systemd/system/{service_name}.service"
 
 def write_conditional_script():
-    status(f"Creating conditional launch script at {check_script}", "INFO")
+    log_info(f"Creating conditional launch script at {check_script}")
     script = f"""#!/bin/bash
 
 CONF_FILE="{config_file}"
@@ -36,10 +36,10 @@ fi
         f.write(script)
     subprocess.run(["sudo", "mv", "/tmp/conditional_launch.sh", check_script], check=True)
     subprocess.run(["sudo", "chmod", "+x", check_script], check=True)
-    status("Conditional launch script installed.", "SUCCESS")
+    log_success("Conditional launch script installed.")
 
 def write_service_file():
-    status(f"Creating systemd service file at {service_file}", "INFO")
+    log_info(f"Creating systemd service file at {service_file}")
     service = f"""[Unit]
 Description=Launch AP Mode WordPress server if STARTUP flag is set
 After=network.target
@@ -61,26 +61,26 @@ WantedBy=multi-user.target
         f.write(service)
     subprocess.run(["sudo", "mv", "/tmp/apmode-launcher.service", service_file], check=True)
     subprocess.run(["sudo", "chmod", "644", service_file], check=True)
-    status("Systemd service file created.", "SUCCESS")
+    log_success("Systemd service file created.")
 
 def enable_service():
-    status("Reloading systemd and enabling startup daemon...", "INFO")
+    log_info("Reloading systemd and enabling startup daemon...")
     subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
     subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
     subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
-    status("Startup daemon enabled and started.", "SUCCESS")
+    log_success("Startup daemon enabled and started.")
 
 def main():
     if not os.path.isfile(launch_script):
-        status(f"launch.sh not found at {launch_script}", "ERROR")
+        log_error(f"launch.sh not found at {launch_script}")
         return
     if not os.path.isfile(config_file):
-        status(f"launch_settings.conf not found at {config_file} (defaulting to STARTUP=false)", "WARN")
+        log_warn(f"launch_settings.conf not found at {config_file} (defaulting to STARTUP=false)")
 
     write_conditional_script()
     write_service_file()
     enable_service()
-    status("Startup daemon installed successfully.", "SUCCESS")
+    log_success("Startup daemon installed successfully.")
 
 if __name__ == "__main__":
     main()
