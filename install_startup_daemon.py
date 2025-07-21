@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 import getpass
-from utils.status import log_info, log_success, log_warn, log_error
+from status import log_info, log_success, log_warn, log_error
 
 user = getpass.getuser()
 home_dir = str(Path.home())
