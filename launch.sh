@@ -353,7 +353,6 @@ if [ "$USE_LOCAL" = false ]; then
     fi
 fi
 
-
 # Handle CLI arguments
 for arg in "$@"; do
     case $arg in
