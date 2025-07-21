@@ -56,7 +56,6 @@ def reset_wlan_interfaces():
     run("modprobe -r brcmfmac", check=False)
     run("modprobe brcmfmac")
     run("rfkill unblock wifi")
-    run(f"nmcli dev set {WLAN} managed no")
     run(f"ip link set {WLAN} down")
     run(f"ip addr flush dev {WLAN}")
     run(f"ip link set {WLAN} up")
@@ -108,8 +107,16 @@ def test_internet():
 def create_ap_interface():
     log_info("Creating virtual AP interface...")
     run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
+    for _ in range(10):
+        if os.path.exists(f"/sys/class/net/{INTERFACE}"):
+            break
+        time.sleep(0.5)
+    else:
+        log_error("uap0 failed to appear after creation.")
+        return
     run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
     run(f"ip link set {INTERFACE} up")
+    log_success("uap0 created and brought up.")
 
 def configure_hostapd():
     log_info("Generating hostapd config...")
@@ -216,6 +223,7 @@ def main():
 
     log_success("Internet confirmed. Starting AP setup.")
     create_ap_interface()
+    run(f"nmcli dev set {WLAN} managed no")
     configure_hostapd()
     configure_dnsmasq()
     enable_nat_forwarding()
