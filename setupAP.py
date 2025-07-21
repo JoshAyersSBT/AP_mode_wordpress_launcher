@@ -56,7 +56,7 @@ def reset_wlan_interfaces():
     run("modprobe -r brcmfmac", check=False)
     run("modprobe brcmfmac")
     run("rfkill unblock wifi")
-    run(f"nmcli dev set {WLAN} managed yes")
+    run(f"nmcli dev set {WLAN} managed no")
     run(f"ip link set {WLAN} down")
     run(f"ip addr flush dev {WLAN}")
     run(f"ip link set {WLAN} up")
@@ -195,7 +195,6 @@ def start_ap_services():
     log_info("Starting dnsmasq service...")
     run(f"systemctl restart dnsmasq@{INTERFACE}")
 
-# Main
 def main():
     if os.geteuid() != 0:
         log_error("Must be run as root.")
