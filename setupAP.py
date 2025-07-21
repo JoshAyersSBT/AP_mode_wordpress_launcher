@@ -243,7 +243,7 @@ def main():
 
     log_success("Internet confirmed. Starting AP setup.")
     create_ap_interface()
-    mark_uap0_unmanaged()
+    #mark_uap0_unmanaged()
     run(f"nmcli dev set {WLAN} managed no")
     configure_hostapd()
     configure_dnsmasq()
