@@ -1,31 +1,17 @@
 import subprocess
 import os
 import sys
+from utils.status import log_info, log_success, log_warn, log_error  # Shared status functions
 
 DNSMASQ_CONF = "/etc/dnsmasq.uap0.conf"
 SYSTEMD_UNIT = "/etc/systemd/system/dnsmasq@.service"
 
-RED = '\033[1;31m'
-GREEN = '\033[1;32m'
-YELLOW = '\033[1;33m'
-BLUE = '\033[1;34m'
-NC = '\033[0m'
-
-def status(msg, level="INFO"):
-    color = {
-        "INFO": BLUE,
-        "WARN": YELLOW,
-        "ERROR": RED,
-        "SUCCESS": GREEN
-    }.get(level, NC)
-    print(f"{color}[{level}] {msg}{NC}")
-
 def run(cmd):
-    status(f"Running: {cmd}", "INFO")
+    log_info(f"Running: {cmd}")
     subprocess.run(cmd, shell=True, check=True)
 
 def write_dnsmasq_conf():
-    status("Writing dedicated dnsmasq config for uap0...", "INFO")
+    log_info("Writing dedicated dnsmasq config for uap0...")
     with open(DNSMASQ_CONF, "w") as f:
         f.write("""\
 interface=uap0
@@ -34,10 +20,10 @@ domain-needed
 bogus-priv
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 """)
-    status("dnsmasq config written.", "SUCCESS")
+    log_success("dnsmasq config written.")
 
 def write_systemd_unit():
-    status("Writing systemd service unit for dnsmasq@.service...", "INFO")
+    log_info("Writing systemd service unit for dnsmasq@.service...")
     with open(SYSTEMD_UNIT, "w") as f:
         f.write("""\
 [Unit]
@@ -54,24 +40,24 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 """)
-    status("Systemd unit written.", "SUCCESS")
+    log_success("Systemd unit written.")
 
 def reload_and_enable():
-    status("Reloading systemd and enabling dnsmasq@uap0...", "INFO")
+    log_info("Reloading systemd and enabling dnsmasq@uap0...")
     run("systemctl daemon-reexec")
     run("systemctl daemon-reload")
     run("systemctl enable dnsmasq@uap0.service")
-    status("dnsmasq@uap0.service enabled.", "SUCCESS")
+    log_success("dnsmasq@uap0.service enabled.")
 
 def main():
     if os.geteuid() != 0:
-        status("This script must be run as root.", "ERROR")
+        log_error("This script must be run as root.")
         sys.exit(1)
 
     write_dnsmasq_conf()
     write_systemd_unit()
     reload_and_enable()
-    status("dnsmasq@uap0 systemd service is installed and enabled.", "SUCCESS")
+    log_success("dnsmasq@uap0 systemd service is installed and enabled.")
 
 if __name__ == "__main__":
     main()

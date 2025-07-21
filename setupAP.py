@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 import configparser
+from status import log_info, log_success, log_warn, log_error
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,19 +36,6 @@ WLAN = "wlan0"
 STATIC_AP_IP = "192.168.50.1"
 HOSTAPD_CONF = f"/etc/hostapd/hostapd.{INTERFACE}.conf"
 DNSMASQ_CONF = "/etc/dnsmasq.conf"
-
-# ANSI colors
-RED = "\033[1;31m"
-GREEN = "\033[1;32m"
-YELLOW = "\033[1;33m"
-BLUE = "\033[1;34m"
-NC = "\033[0m"
-
-# Logging
-def log_info(msg): print(f"{BLUE}[INFO]{NC} {msg}")
-def log_success(msg): print(f"{GREEN}[SUCCESS]{NC} {msg}")
-def log_warn(msg): print(f"{YELLOW}[WARN]{NC} {msg}")
-def log_error(msg): print(f"{RED}[ERROR]{NC} {msg}")
 
 # Shell runner
 def run(cmd, check=True, capture_output=False):

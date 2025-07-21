@@ -2,21 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 import getpass
-
-RED = '\033[1;31m'
-GREEN = '\033[1;32m'
-YELLOW = '\033[1;33m'
-BLUE = '\033[1;34m'
-NC = '\033[0m'
-
-def status(msg, level="INFO"):
-    color = {
-        "INFO": BLUE,
-        "WARN": YELLOW,
-        "ERROR": RED,
-        "SUCCESS": GREEN
-    }.get(level, NC)
-    print(f"{color}[{level}] {msg}{NC}")
+from utils.status import log_info, log_success, log_warn, log_error
 
 user = getpass.getuser()
 home_dir = str(Path.home())

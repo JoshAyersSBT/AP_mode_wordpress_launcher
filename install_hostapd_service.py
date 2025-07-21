@@ -1,6 +1,7 @@
 import subprocess
 import os
 import sys
+from status import log_info, log_success, log_warn, log_error  # Shared logging functions
 
 # Constants
 SSID = "BetaBox1"
@@ -9,35 +10,18 @@ INTERFACE = "uap0"
 HOSTAPD_CONF = f"/etc/hostapd/hostapd.{INTERFACE}.conf"
 UNMANAGED_CONF = f"/etc/NetworkManager/conf.d/unmanaged-{INTERFACE}.conf"
 
-# ANSI Colors
-RED = '\033[1;31m'
-GREEN = '\033[1;32m'
-YELLOW = '\033[1;33m'
-BLUE = '\033[1;34m'
-NC = '\033[0m'  # No Color
-
-def status(msg, level="INFO"):
-    color = {
-        "INFO": BLUE,
-        "WARN": YELLOW,
-        "ERROR": RED,
-        "SUCCESS": GREEN
-    }.get(level, NC)
-    print(f"{color}[{level}] {msg}{NC}")
-
 def run(cmd, check=True):
-    status(f"Running: {cmd}", "INFO")
+    log_info(f"Running: {cmd}")
     subprocess.run(cmd, shell=True, check=check)
 
-
 def write_hostapd_conf():
-    status(f"Writing hostapd config to {HOSTAPD_CONF}...", "INFO")
+    log_info(f"Writing hostapd config to {HOSTAPD_CONF}...")
 
     if not 8 <= len(PASSWORD) <= 63:
-        status("WPA password must be 8–63 characters.", "ERROR")
+        log_error("WPA password must be 8–63 characters.")
         sys.exit(1)
 
-    os.makedirs(os.path.dirname(HOSTAPD_CONF), exist_ok=True)  # ← Add this line
+    os.makedirs(os.path.dirname(HOSTAPD_CONF), exist_ok=True)
 
     with open(HOSTAPD_CONF, "w") as f:
         f.write(f"""\
@@ -56,30 +40,30 @@ wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 """)
-    status("Hostapd config written successfully.", "SUCCESS")
+    log_success("Hostapd config written successfully.")
 
 def mark_interface_unmanaged():
-    status(f"Marking {INTERFACE} as unmanaged by NetworkManager...", "INFO")
+    log_info(f"Marking {INTERFACE} as unmanaged by NetworkManager...")
     with open(UNMANAGED_CONF, "w") as f:
         f.write(f"""\
 [keyfile]
 unmanaged-devices=interface-name:{INTERFACE}
 """)
     run("systemctl restart NetworkManager")
-    status(f"Interface {INTERFACE} marked as unmanaged.", "SUCCESS")
+    log_success(f"Interface {INTERFACE} marked as unmanaged.")
 
 def disable_system_hostapd():
-    status("Disabling conflicting hostapd services...", "INFO")
+    log_info("Disabling conflicting hostapd services...")
     run("systemctl stop hostapd@uap0.service", check=False)
     run("systemctl disable hostapd@uap0.service", check=False)
     run("systemctl stop hostapd.service", check=False)
     run("systemctl disable hostapd.service", check=False)
     run("systemctl mask hostapd.service", check=False)
-    status("System-wide hostapd services disabled.", "SUCCESS")
+    log_success("System-wide hostapd services disabled.")
 
 def create_start_script():
     path = "/usr/local/bin/start_ap.sh"
-    status(f"Creating AP startup script at {path}...", "INFO")
+    log_info(f"Creating AP startup script at {path}...")
     with open(path, "w") as f:
         f.write(f"""#!/bin/bash
 if ! ip link show {INTERFACE} &>/dev/null; then
@@ -94,18 +78,18 @@ systemctl restart dnsmasq
 echo "[SUCCESS] AP '{SSID}' started on {INTERFACE}"
 """)
     run(f"chmod +x {path}")
-    status("Manual AP launcher created.", "SUCCESS")
+    log_success("Manual AP launcher created.")
 
 def main():
     if os.geteuid() != 0:
-        status("This script must be run as root.", "ERROR")
+        log_error("This script must be run as root.")
         sys.exit(1)
 
     write_hostapd_conf()
     mark_interface_unmanaged()
     disable_system_hostapd()
     create_start_script()
-    status("Hostapd installation and configuration complete. Run 'sudo start_ap.sh' to start the AP.", "SUCCESS")
+    log_success("Hostapd installation and configuration complete. Run 'sudo start_ap.sh' to start the AP.")
 
 if __name__ == "__main__":
     main()
