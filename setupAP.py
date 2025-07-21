@@ -104,10 +104,13 @@ def test_internet():
     except subprocess.CalledProcessError:
         return False
 
-# AP Setup
 def create_ap_interface():
+    log_info("Disabling NetworkManager temporarily...")
+    run("systemctl stop NetworkManager")
+
     log_info("Creating virtual AP interface...")
     run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
+    
     for _ in range(10):
         if os.path.exists(f"/sys/class/net/{INTERFACE}"):
             break
@@ -115,9 +118,16 @@ def create_ap_interface():
     else:
         log_error("uap0 failed to appear after creation.")
         return
+
     run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
     run(f"ip link set {INTERFACE} up")
     log_success("uap0 created and brought up.")
+
+    mark_uap0_unmanaged()
+
+    log_info("Restarting NetworkManager...")
+    run("systemctl start NetworkManager")
+
 
 def mark_uap0_unmanaged():
     log_info(f"Marking {INTERFACE} as unmanaged by NetworkManager...")
