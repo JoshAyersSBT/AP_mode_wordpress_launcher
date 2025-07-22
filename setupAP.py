@@ -47,24 +47,15 @@ def run(cmd, check=True, capture_output=False):
         subprocess.run(cmd, shell=True, check=check)
 
 def reset_wlan_interfaces():
-    log_info("Stopping conflicting services and resetting interfaces...")
+    log_info("Resetting AP-related services (non-destructive)...")
 
-    run("systemctl stop NetworkManager", check=False)
+    # Only stop services related to AP — don’t touch wlan0
     run("systemctl stop hostapd", check=False)
     run("systemctl stop dnsmasq", check=False)
     run(f"iw dev {INTERFACE} del", check=False)
 
-    run("modprobe -r brcmfmac cfg80211", check=False)
-    time.sleep(1)
-    run("modprobe brcmfmac cfg80211")
-    time.sleep(1)
+    log_success("Cleaned up AP services.")
 
-    run("rfkill unblock wifi")
-    run("ip link set wlan0 down")
-    run("ip addr flush dev wlan0")
-    run("ip link set wlan0 up")
-
-    log_success("Wireless interfaces reset.")
 
 # Connection checks
 def is_connected():
@@ -358,7 +349,6 @@ def main():
     wait_for_interface("uap0")
     configure_hostapd()
     configure_dnsmasq()
-
     update_etc_hosts()
     configure_apache_for_wordpress()
     start_ap_services()
