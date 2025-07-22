@@ -100,10 +100,13 @@ full_tool_install() {
     deactivate
 
     # --- Step 7: Add system link
-        # Determine shell config file
-    # Corrected alias logic: use the calling user's home dir, not root
-    USER_HOME=$(eval echo "~$SUDO_USER")
-    USER_SHELL=$(getent passwd "$SUDO_USER" | cut -d: -f7)
+    # Use fixed absolute path (since this tool installs to /)
+    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
+
+    # Determine calling user's shell config
+    USER_NAME="${SUDO_USER:-$USER}"
+    USER_HOME=$(eval echo "~$USER_NAME")
+    USER_SHELL=$(getent passwd "$USER_NAME" | cut -d: -f7)
     SHELL_NAME=$(basename "$USER_SHELL")
 
     case "$SHELL_NAME" in
@@ -113,24 +116,11 @@ full_tool_install() {
         *)     SHELL_RC="$USER_HOME/.bashrc" ;;
     esac
 
-    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
-
+    # Add alias only if not present
     if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
         echo -e "\033[1;34m[INFO]\033[0m Adding alias 'LMS' to $SHELL_RC"
         echo "$ALIAS_CMD" >> "$SHELL_RC"
-        echo -e "\033[1;32m[SUCCESS]\033[0m Alias added. Please run: \033[1;36msource $SHELL_RC\033[0m"
-    else
-        echo -e "\033[1;33m[WARN]\033[0m Alias 'LMS' already present in $SHELL_RC"
-    fi
-
-    # Create alias
-    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
-
-    # Check if already present
-    if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
-        echo -e "\033[1;34m[INFO]\033[0m Adding alias 'LMS' to $SHELL_RC"
-        echo "$ALIAS_CMD" >> "$SHELL_RC"
-        echo -e "\033[1;32m[SUCCESS]\033[0m Alias added. Please restart your terminal or run: \033[1;36msource $SHELL_RC\033[0m"
+        echo -e "\033[1;32m[SUCCESS]\033[0m Alias added. Run: \033[1;36msource $SHELL_RC\033[0m"
     else
         echo -e "\033[1;33m[WARN]\033[0m Alias 'LMS' already present in $SHELL_RC"
     fi
