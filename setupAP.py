@@ -236,7 +236,7 @@ def update_etc_hosts():
 
 def start_ap_services():
     log_info("Starting hostapd...")
-    run(f"hostapd -B {HOSTAPD_CONF}")
+    run("systemctl restart hostapd.service")
     log_info("Waiting for uap0 to be ready before starting dnsmasq...")
     for _ in range(10):
         if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
