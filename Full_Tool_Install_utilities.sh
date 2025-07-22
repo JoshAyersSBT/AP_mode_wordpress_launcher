@@ -100,8 +100,29 @@ full_tool_install() {
     deactivate
 
     # --- Step 7: Add system link
-    # Use fixed absolute path (since this tool installs to /)
-# Define LMS launcher globally as a script (works with sudo)
+# -------- Remove conflicting LMS aliases/functions --------
+echo -e "\033[1;34m[INFO]\033[0m Removing any conflicting LMS aliases or functions..."
+
+USER_NAME="${SUDO_USER:-$USER}"
+USER_HOME=$(eval echo "~$USER_NAME")
+USER_SHELL=$(getent passwd "$USER_NAME" | cut -d: -f7)
+SHELL_NAME=$(basename "$USER_SHELL")
+
+# Determine shell config
+case "$SHELL_NAME" in
+    bash)  SHELL_RC="$USER_HOME/.bashrc" ;;
+    zsh)   SHELL_RC="$USER_HOME/.zshrc" ;;
+    fish)  SHELL_RC="$USER_HOME/.config/fish/config.fish" ;;
+    *)     SHELL_RC="$USER_HOME/.bashrc" ;;
+esac
+
+# Remove any LMS alias or function from shell config
+sed -i '/alias LMS=/d' "$SHELL_RC"
+sed -i '/LMS() {/,+1d' "$SHELL_RC" 2>/dev/null
+
+echo -e "\033[1;32m[SUCCESS]\033[0m Conflicting LMS aliases/functions removed from $SHELL_RC"
+
+# -------- Create global LMS command --------
 echo -e "\033[1;34m[INFO]\033[0m Installing global LMS command to /usr/local/bin..."
 
 sudo bash -c 'cat > /usr/local/bin/LMS' <<'EOF'
@@ -112,8 +133,7 @@ EOF
 sudo chmod +x /usr/local/bin/LMS
 
 echo -e "\033[1;32m[SUCCESS]\033[0m LMS command installed at /usr/local/bin/LMS"
-echo -e "\033[1;34m[INFO]\033[0m You can now run it with: \033[1;36mLMS --status\033[0m"
-
+echo -e "\033[1;34m[INFO]\033[0m You can now run it from anywhere: \033[1;36mLMS --status\033[0m"
 
 
     # --- Step 7: Launch configuration UI

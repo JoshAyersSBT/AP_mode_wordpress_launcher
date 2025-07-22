@@ -6,7 +6,7 @@
 source "$(dirname "$0")/launch_Utilities.sh"
 source "$(dirname "$0")/Full_Tool_Install_utilities.sh"
 
-cd "$(dirname "$0")"
+cd "/AP_mode_wordpress_launcher"
 set -e
 
 # --- Auto-bootstrap if outside /AP_mode_wordpress_launcher or missing files ---
