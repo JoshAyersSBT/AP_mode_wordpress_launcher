@@ -171,7 +171,7 @@ def ensure_lighttpd_installed():
 def configure_lighttpd_redirect():
     log_info("Configuring lighttpd to redirect to https://learning.betabox...")
 
-    os.makedirs("/var/www/html", exist_ok=True)  # Ensure directory exists
+    os.makedirs("/AP_mode_wordpress_launcher/www/captive-portal/", exist_ok=True)  # Ensure directory exists
     # Create redirect HTML page
     html = """\
 <!DOCTYPE html>
@@ -184,7 +184,7 @@ def configure_lighttpd_redirect():
   </body>
 </html>
 """
-    with open("/var/www/html/index.html", "w") as f:
+    with open("/AP_mode_wordpress_launcher/www/captive-portal/index.html", "w") as f:
         f.write(html)
 
     # Create redirect rule file
