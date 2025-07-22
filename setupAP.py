@@ -107,9 +107,24 @@ def test_internet():
 # AP Setup
 def create_ap_interface():
     log_info("Creating virtual AP interface...")
+
+    # Clean up if it exists
+    run(f"iw dev {INTERFACE} del", check=False)
+
     run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
+
+    for _ in range(10):
+        if os.path.exists(f"/sys/class/net/{INTERFACE}"):
+            break
+        time.sleep(0.5)
+    else:
+        log_error(f"{INTERFACE} failed to appear after creation.")
+        return
+
     run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
     run(f"ip link set {INTERFACE} up")
+    log_success(f"{INTERFACE} created and brought u_
+
 
 def configure_hostapd():
     log_info("Generating hostapd config...")
@@ -184,7 +199,7 @@ def configure_lighttpd_redirect():
   </body>
 </html>
 """
-    with open("/AP_mode_wordpress_launcher/www/captive-portal/index.html", "w") as f:
+    with open("/var/www/html/index.html", "w") as f:
         f.write(html)
 
     # Create redirect rule file
