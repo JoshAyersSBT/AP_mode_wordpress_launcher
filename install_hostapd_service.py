@@ -58,7 +58,7 @@ def disable_system_hostapd():
     run("systemctl disable hostapd@uap0.service", check=False)
     run("systemctl stop hostapd.service", check=False)
     run("systemctl disable hostapd.service", check=False)
-    run("systemctl mask hostapd.service", check=False)
+    run("systemctl enable hostapd.service", check=False)
     log_success("System-wide hostapd services disabled.")
 
 def create_start_script():
