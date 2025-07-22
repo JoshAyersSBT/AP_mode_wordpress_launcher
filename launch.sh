@@ -253,7 +253,7 @@ EOF
 done
 
 print_progress "Waiting for uap0 interface to come online"
-for i in {1..10}; do
+for i in {1..5}; do
     if ip link show uap0 > /dev/null 2>&1; then
         break
     fi
