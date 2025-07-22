@@ -252,12 +252,26 @@ EOF
     esac
 done
 
+print_progress "Waiting for uap0 interface to come online"
+for i in {1..10}; do
+    if ip link show uap0 > /dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+if ! ip link show uap0 > /dev/null 2>&1; then
+    echo -e "${RED}[ERROR]${NC} Interface uap0 did not appear after setup."
+    exit 1
+fi
+
 print_progress "Detecting IP address"
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
     AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 fi
+
 
 if [ -z "$AP_IP" ]; then
     echo -e "${RED}[ERROR]${NC} Failed to detect IP address."
