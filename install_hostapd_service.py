@@ -90,9 +90,9 @@ def main():
     disable_system_hostapd()
     create_start_script()
     log_success("Hostapd installation and configuration complete. Run 'sudo start_ap.sh' to start the AP.")
-    run('sudo chown root:root /etc/hostapd/hostapd.uap0.conf')
-    run('sudo chmod 600 /etc/hostapd/hostapd.uap0.conf')
-    run('sudo systemctl restart hostapd')
+    run('chown root:root /etc/hostapd/hostapd.uap0.conf')
+    run('chmod 600 /etc/hostapd/hostapd.uap0.conf')
+    run('systemctl restart hostapd')
 
 if __name__ == "__main__":
     main()
