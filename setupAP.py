@@ -123,7 +123,8 @@ def create_ap_interface():
 
     run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
     run(f"ip link set {INTERFACE} up")
-    log_success(f"{INTERFACE} created and brought u_
+    log_success(f"{INTERFACE} created and brought up.")
+
 
 
 def configure_hostapd():
