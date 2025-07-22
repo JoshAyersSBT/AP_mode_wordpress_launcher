@@ -276,20 +276,21 @@ def configure_apache_for_wordpress():
 
     # Write Apache VirtualHost config
     apache_conf = f"""\
-<VirtualHost *:80>
-    ServerName learning.betabox
-    DocumentRoot {wp_path}
+    <VirtualHost *:80>
+        ServerName learning.betabox
+        DocumentRoot {wp_path}
 
-    <Directory {wp_path}>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
+        <Directory {wp_path}>
+            Options Indexes FollowSymLinks
+            AllowOverride All
+            Require all granted
+        </Directory>
 
-    ErrorLog ${{{{APACHE_LOG_DIR}}}}/pipress_error.log
-    CustomLog ${{{{APACHE_LOG_DIR}}}}/pipress_access.log combined
-</VirtualHost>
-"""
+        ErrorLog ${APACHE_LOG_DIR}/pipress_error.log
+        CustomLog ${APACHE_LOG_DIR}/pipress_access.log combined
+    </VirtualHost>
+    """
+
     with open(apache_conf_path, "w") as f:
         f.write(apache_conf)
 
