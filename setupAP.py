@@ -75,10 +75,30 @@ def is_connected():
         return False
 
 def attempt_reconnect():
+    import time
+    import subprocess
+
+    def is_eth_connected():
+        result = subprocess.run(
+            ["cat", "/sys/class/net/eth0/carrier"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        return result.returncode == 0 and result.stdout.decode().strip() == "1"
+
+    if is_eth_connected():
+        log_info("Ethernet is connected. Skipping Wi-Fi reconnection.")
+        return True
+
+    if os.system("systemctl is-active --quiet NetworkManager") != 0:
+        log_info("NetworkManager is not active. Skipping nmcli Wi-Fi reconnect.")
+        return False
+
     log_info("Scanning and reconnecting to known Wi-Fi networks...")
     run("nmcli radio wifi on")
     run("nmcli dev wifi rescan")
     time.sleep(3)
+
     known = run("nmcli connection show", capture_output=True)
     networks = [line.split()[0] for line in known.splitlines()[1:] if "wifi" in line]
 
@@ -99,6 +119,7 @@ def attempt_reconnect():
 
     log_error("Could not connect to any known network.")
     return False
+
 
 def test_internet():
     log_info("Verifying internet connection...")
