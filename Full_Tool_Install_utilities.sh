@@ -113,7 +113,7 @@ full_tool_install() {
         *)     SHELL_RC="$USER_HOME/.bashrc" ;;
     esac
 
-    ALIAS_CMD='alias LMS="bash ~/AP_mode_wordpress_launcher/launch.sh"'
+    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
 
     if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
         echo -e "\033[1;34m[INFO]\033[0m Adding alias 'LMS' to $SHELL_RC"
@@ -123,9 +123,8 @@ full_tool_install() {
         echo -e "\033[1;33m[WARN]\033[0m Alias 'LMS' already present in $SHELL_RC"
     fi
 
-
     # Create alias
-    ALIAS_CMD='alias LMS="bash ~/AP_mode_wordpress_launcher/launch.sh"'
+    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
 
     # Check if already present
     if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
