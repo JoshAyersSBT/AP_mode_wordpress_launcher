@@ -101,29 +101,18 @@ full_tool_install() {
 
     # --- Step 7: Add system link
     # Use fixed absolute path (since this tool installs to /)
-    # Detect calling user and shell
-    USER_NAME="${SUDO_USER:-$USER}"
-    USER_HOME=$(eval echo "~$USER_NAME")
-    USER_SHELL=$(getent passwd "$USER_NAME" | cut -d: -f7)
-    SHELL_NAME=$(basename "$USER_SHELL")
+# Define LMS launcher globally as a script (works with sudo)
+echo -e "\033[1;34m[INFO]\033[0m Installing global LMS command to /usr/local/bin..."
 
-    case "$SHELL_NAME" in
-        bash)  SHELL_RC="$USER_HOME/.bashrc" ;;
-        zsh)   SHELL_RC="$USER_HOME/.zshrc" ;;
-        fish)  SHELL_RC="$USER_HOME/.config/fish/config.fish" ;;
-        *)     SHELL_RC="$USER_HOME/.bashrc" ;;
-    esac
+sudo bash -c 'cat > /usr/local/bin/LMS' <<'EOF'
+#!/bin/bash
+sudo bash /AP_mode_wordpress_launcher/launch.sh "$@"
+EOF
 
-    # Define correct alias
-    ALIAS_CMD='alias LMS="bash /AP_mode_wordpress_launcher/launch.sh"'
+sudo chmod +x /usr/local/bin/LMS
 
-    # Remove existing LMS alias lines
-    sed -i '/alias LMS=/d' "$SHELL_RC"
-
-    # Add new LMS alias
-    echo "$ALIAS_CMD" >> "$SHELL_RC"
-    echo -e "\033[1;32m[SUCCESS]\033[0m Alias 'LMS' added to $SHELL_RC"
-    echo -e "\033[1;34m[INFO]\033[0m Please run: \033[1;36msource $SHELL_RC\033[0m or restart your shell"
+echo -e "\033[1;32m[SUCCESS]\033[0m LMS command installed at /usr/local/bin/LMS"
+echo -e "\033[1;34m[INFO]\033[0m You can now run it with: \033[1;36mLMS --status\033[0m"
 
 
 

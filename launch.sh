@@ -6,7 +6,7 @@
 source "$(dirname "$0")/launch_Utilities.sh"
 source "$(dirname "$0")/Full_Tool_Install_utilities.sh"
 
-
+cd "$(dirname "$0")"
 set -e
 
 # --- Auto-bootstrap if outside /AP_mode_wordpress_launcher or missing files ---
@@ -300,3 +300,5 @@ echo "- Web Portal:  http://learning.betabox (http://$AP_IP)"
 echo "- Monitor UI:  http://moitor.betabox (http://$AP_IP:$MONITOR_PORT)"
 echo "- Logs:        $LOG_FILE"
 echo "=============================="
+
+source /home/pi/.bashrc
