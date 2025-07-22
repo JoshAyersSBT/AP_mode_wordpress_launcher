@@ -66,19 +66,20 @@ def create_start_script():
     log_info(f"Creating AP startup script at {path}...")
     with open(path, "w") as f:
         f.write(f"""#!/bin/bash
-    if ! ip link show {INTERFACE} &>/dev/null; then
-        echo "[INFO] Creating {INTERFACE} interface..."
-        iw dev wlan0 interface add {INTERFACE} type __ap
-        sleep 1
-    fi
+# Ensure clean state for {INTERFACE}
+ip link delete {INTERFACE} type __ap 2>/dev/null
 
-    ip addr add 192.168.50.1/24 dev {INTERFACE}
-    ip link set {INTERFACE} up
-    hostapd -B {HOSTAPD_CONF}
-    systemctl restart dnsmasq
-    echo "[SUCCESS] AP '{SSID}' started on {INTERFACE}"
-    """)
+echo "[INFO] Creating {INTERFACE} interface..."
+iw dev wlan0 interface add {INTERFACE} type __ap
+sleep 1
 
+ip addr add 192.168.50.1/24 dev {INTERFACE}
+ip link set {INTERFACE} up
+
+hostapd -B {HOSTAPD_CONF}
+systemctl restart dnsmasq
+echo "[SUCCESS] AP '{SSID}' started on {INTERFACE}"
+""")
     run(f"chmod +x {path}")
     log_success("Manual AP launcher created.")
 
