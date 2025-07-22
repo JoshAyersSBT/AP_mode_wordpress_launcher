@@ -49,7 +49,7 @@ def run(cmd, check=True, capture_output=False):
 def reset_wlan_interfaces():
     log_info("Stopping conflicting services and resetting interfaces...")
 
-    run("systemctl stop NetworkManager", check=False)
+    #run("systemctl stop NetworkManager", check=False)
     run("systemctl stop hostapd", check=False)
     run("systemctl stop dnsmasq", check=False)
     run(f"iw dev {INTERFACE} del", check=False)
