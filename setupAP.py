@@ -46,21 +46,25 @@ def run(cmd, check=True, capture_output=False):
     else:
         subprocess.run(cmd, shell=True, check=check)
 
-# Interface reset
 def reset_wlan_interfaces():
-    log_info("Resetting wlan0 and cleaning up old AP interfaces...")
+    log_info("Stopping conflicting services and resetting interfaces...")
+
+    run("systemctl stop NetworkManager", check=False)
     run("systemctl stop hostapd", check=False)
     run("systemctl stop dnsmasq", check=False)
     run(f"iw dev {INTERFACE} del", check=False)
-    run("modprobe -r brcmfmac", check=False)
-    run("modprobe brcmfmac")
+
+    run("modprobe -r brcmfmac cfg80211", check=False)
+    time.sleep(1)
+    run("modprobe brcmfmac cfg80211")
+    time.sleep(1)
+
     run("rfkill unblock wifi")
-    run("nmcli radio wifi on")
-    run(f"nmcli dev set {WLAN} managed yes")
-    run(f"ip link set {WLAN} down")
-    run(f"ip addr flush dev {WLAN}")
-    run(f"ip link set {WLAN} up")
-    run("systemctl restart NetworkManager")
+    run("ip link set wlan0 down")
+    run("ip addr flush dev wlan0")
+    run("ip link set wlan0 up")
+
+    log_success("Wireless interfaces reset.")
 
 # Connection checks
 def is_connected():
