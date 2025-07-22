@@ -245,7 +245,7 @@ def configure_lighttpd_redirect():
   </body>
 </html>
 """
-    with open("/var/www/html/index.html", "w") as f:
+    with open("/AP_mode_wordpress_launcher/www/captive-portal/index.html", "w") as f:
         f.write(html)
 
     # Create redirect rule file
