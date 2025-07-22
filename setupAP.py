@@ -110,30 +110,26 @@ def test_internet():
 
 # AP Setup
 def create_ap_interface():
-    log_info(f"Setting up {INTERFACE} for access point mode...")
+    log_info("Creating virtual AP interface...")
 
-    # Stop wpa_supplicant and bring down wlan0 to free it
-    run("systemctl stop wpa_supplicant.service")
-    run("ip link set wlan0 down")
+    run(f"iw dev {INTERFACE} del", check=False)
+    run(f"iw dev {WLAN} interface add {INTERFACE} type __ap")
 
-    # Clean up existing interface if needed
-    run(f"ip link delete {INTERFACE} type __ap", check=False)
-
-    # Create and configure new AP interface
-    run(f"iw dev wlan0 interface add {INTERFACE} type __ap")
-    time.sleep(1)
-
-    run(f"ip addr add 192.168.50.1/24 dev {INTERFACE}")
+    # Bring interface up immediately after creation
     run(f"ip link set {INTERFACE} up")
 
-    # Confirm interface was successfully created
+    # Wait for system to recognize it
     for _ in range(10):
-        if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
-            log_success(f"{INTERFACE} interface created and active.")
-            return
+        if os.path.exists(f"/sys/class/net/{INTERFACE}"):
+            break
         time.sleep(0.5)
+    else:
+        log_error(f"{INTERFACE} failed to appear after creation.")
+        return
 
-    log_error(f"Interface {INTERFACE} did not appear after setup.")
+    run(f"ip addr add {STATIC_AP_IP}/24 dev {INTERFACE}")
+    log_success(f"{INTERFACE} created and brought up.")
+
 
 
 def wait_for_interface(interface: str, max_tries=10):
