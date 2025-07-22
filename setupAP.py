@@ -136,6 +136,23 @@ def create_ap_interface():
     log_error(f"Interface {INTERFACE} did not appear after setup.")
 
 
+def wait_for_interface(interface: str, max_tries=10):
+    import subprocess
+
+    log_info(f"Waiting for interface {interface} to appear...")
+    for i in range(max_tries):
+        result = subprocess.run(
+            ["ip", "link", "show", interface],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        if result.returncode == 0:
+            log_success(f"Interface {interface} is present.")
+            return True
+        time.sleep(0.5)
+
+    log_error(f"Interface {interface} did not appear after {max_tries} tries.")
+    return False
 
 
 def configure_hostapd():
@@ -279,6 +296,7 @@ def main():
 
     log_success("Internet confirmed. Starting AP setup.")
     create_ap_interface()
+    wait_for_interface("uap0")
     configure_hostapd()
     configure_dnsmasq()
     update_etc_hosts()
