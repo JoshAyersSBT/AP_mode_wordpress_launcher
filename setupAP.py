@@ -113,9 +113,7 @@ def create_ap_interface():
 
 def configure_hostapd():
     log_info("Generating hostapd config...")
-    with open(HOSTAPD_CONF, "w") as f:
-        f.write(f"""\
-interface={INTERFACE}
+    clean_config = f"""interface={INTERFACE}
 driver=nl80211
 ssid={SSID}
 hw_mode=g
@@ -129,12 +127,15 @@ wpa_passphrase={PASSWORD}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
-""")
+"""
+    with open(HOSTAPD_CONF, "w", newline='\n') as f:
+        f.write(clean_config)
+    run(f"chmod 600 {HOSTAPD_CONF}")
 
 '''def configure_dnsmasq():
     log_info("Writing dnsmasq config...")
     with open(DNSMASQ_CONF, "w") as f:
-        f.write(f"""\
+        f.write(f"""
 
 # AP Mode DNSMasq Configuration
 interface={INTERFACE}
@@ -145,6 +146,7 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 address=/learning.betabox/192.168.50.1
 address=/monitor.betabox/192.168.50.1:
 """)'''
+
 def configure_dnsmasq():
     log_info("Writing dnsmasq config...")
     with open(DNSMASQ_CONF, "w") as f:
