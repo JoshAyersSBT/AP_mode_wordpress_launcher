@@ -8,7 +8,7 @@ from status import log_info, log_success, log_warn, log_error
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "..", "launch_settings.conf")
+CONFIG_PATH = os.path.join(BASE_DIR, "launch_settings.conf")
 
 # Default values
 SSID = "BetaBox1"
