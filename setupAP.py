@@ -262,7 +262,7 @@ $HTTP["host"] =~ ".*" {
 def configure_apache_for_wordpress():
     log_info("Configuring Apache to serve WordPress...")
 
-    wp_path = "/AP_mode_wordpress_launcher/www/"
+    wp_path = "/AP_mode_wordpress_launcher/www/captive-portal"
     apache_conf_path = "/etc/apache2/sites-available/pipress.conf"
 
     # Ensure WordPress directory exists
