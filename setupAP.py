@@ -284,7 +284,7 @@ def start_ap_services():
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
         return
-
+    run("pkill -f 'hostapd.*uap0'", check=False)
     log_info("Starting hostapd...")
     run(f"hostapd -B {HOSTAPD_CONF}")
 
