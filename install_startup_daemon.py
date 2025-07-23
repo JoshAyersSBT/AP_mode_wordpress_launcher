@@ -30,31 +30,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c '
-  CONFIG_PATH="/home/pi/AP_mode_wordpress_launcher/launch_settings.conf"
-  LAUNCHER="/home/pi/AP_mode_wordpress_launcher/launch.sh"
-
-  sleep 15  # Ensure network, interfaces, and kernel modules load
-
-  echo "[BOOT] LMS service launching at $(date)" >> /tmp/lms_boot.log
-
-  if [[ "$(grep STARTUP "$CONFIG_PATH" | cut -d "=" -f2)" == "true" ]]; then
-    until bash "$LAUNCHER"; do
-      echo "[BOOT] Launch failed. Retrying..." >> /tmp/lms_boot.log
-      sleep 5
-    done
-    echo "[BOOT] LMS started successfully." >> /tmp/lms_boot.log
-  else
-    echo "[BOOT] LMS autostart disabled." >> /tmp/lms_boot.log
-  fi
-'
-
+ExecStart=/bin/bash /home/pi/AP_mode_wordpress_launcher/launch_wrapper.sh
 RemainAfterExit=true
 
 [Install]
 WantedBy=multi-user.target
-
-
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
@@ -73,6 +53,7 @@ def main():
     if not os.path.exists(LAUNCHER_PATH):
         status(f"Launch script not found at {LAUNCHER_PATH}", "ERROR")
         return
+    run(["chmod","+x","launch_wrapper.sh"])
     write_service()
     enable_service()
 
