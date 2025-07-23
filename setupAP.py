@@ -262,42 +262,45 @@ $HTTP["host"] =~ ".*" {
 def configure_apache_for_wordpress():
     log_info("Configuring Apache to serve WordPress...")
 
-    wp_path = "/AP_mode_wordpress_launcher/www/captive-portal"
+    wp_path = "/AP_mode_wordpress_launcher/www/wordpress"
     apache_conf_path = "/etc/apache2/sites-available/pipress.conf"
 
     # Ensure WordPress directory exists
     if not os.path.exists(wp_path):
         log_warn("WordPress directory not found, downloading...")
-        run(f"mkdir -p /AP_mode_wordpress_launcher/www/captive")
-        run(f"wget -q https://wordpress.org/latest.tar.gz -O /tmp/wordpress.tar.gz")
-        run(f"tar -xzf /tmp/wordpress.tar.gz -C /AP_mode_wordpress_launcher/www/captive-portal")
+        run("wget -q https://wordpress.org/latest.tar.gz -O /tmp/wordpress.tar.gz")
+        run("rm -rf /AP_mode_wordpress_launcher/www/wordpress")
+        run("mkdir -p /AP_mode_wordpress_launcher/www/")
+        run("tar -xzf /tmp/wordpress.tar.gz -C /AP_mode_wordpress_launcher/www/")
         run("rm /tmp/wordpress.tar.gz")
         log_success("WordPress downloaded and extracted.")
 
     # Write Apache VirtualHost config
     apache_conf = f"""\
-    <VirtualHost *:80>
-        ServerName learning.betabox
-        DocumentRoot {wp_path}
+<VirtualHost *:80>
+    ServerName learning.betabox
+    DocumentRoot {wp_path}
 
-        <Directory {wp_path}>
-            Options Indexes FollowSymLinks
-            AllowOverride All
-            Require all granted
-        </Directory>
+    <Directory {wp_path}>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
 
-    </VirtualHost>
-    """
+    ErrorLog $${{APACHE_LOG_DIR}}/pipress_error.log
+    CustomLog $${{APACHE_LOG_DIR}}/pipress_access.log combined
+</VirtualHost>
+"""
 
     with open(apache_conf_path, "w") as f:
         f.write(apache_conf)
 
-    # Enable the new site and disable default
     run("a2ensite pipress.conf")
     run("a2dissite 000-default.conf", check=False)
     run("systemctl restart apache2", check=True)
 
     log_success("Apache configured to serve WordPress at learning.betabox")
+
 
 
 def update_etc_hosts():
