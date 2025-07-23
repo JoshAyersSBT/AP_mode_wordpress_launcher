@@ -2,7 +2,7 @@
 sleep 15  # Wait for system and interfaces to settle
 
 CONFIG_PATH="/AP_mode_wordpress_launcher/launch_settings.conf"
-LAUNCHER="/pi/AP_mode_wordpress_launcher/launch.sh"
+LAUNCHER="/AP_mode_wordpress_launcher/launch.sh"
 
 echo "[BOOT] LMS service launching at $(date)" >> /tmp/lms_boot.log
 

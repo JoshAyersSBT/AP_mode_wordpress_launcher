@@ -30,7 +30,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash /home/pi/AP_mode_wordpress_launcher/launch_wrapper.sh
+ExecStart=/bin/bash /AP_mode_wordpress_launcher/launch_wrapper.sh
 RemainAfterExit=true
 
 [Install]
