@@ -24,31 +24,36 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-Description=Start LMS launcher if STARTUP=true
-After=multi-user.target network-online.target systemd-udevd.service
+Description=Start LMS launcher with retries at boot
+After=network-online.target systemd-udevd.service
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=true
+Type=simple
 ExecStart=/bin/bash -c '
   CONFIG_PATH="/home/pi/AP_mode_wordpress_launcher/launch_settings.conf"
   LAUNCHER="/home/pi/AP_mode_wordpress_launcher/launch.sh"
 
+  sleep 15  # Ensure network, interfaces, and kernel modules load
+
+  echo "[BOOT] LMS service launching at $(date)" >> /tmp/lms_boot.log
+
   if [[ "$(grep STARTUP "$CONFIG_PATH" | cut -d "=" -f2)" == "true" ]]; then
-    echo "Startup flag enabled — launching LMS..."
     until bash "$LAUNCHER"; do
-      echo "LMS failed to start — retrying in 5 seconds..."
+      echo "[BOOT] Launch failed. Retrying..." >> /tmp/lms_boot.log
       sleep 5
     done
-    echo "LMS successfully started."
+    echo "[BOOT] LMS started successfully." >> /tmp/lms_boot.log
   else
-    echo "Startup flag disabled — skipping launch."
+    echo "[BOOT] LMS autostart disabled." >> /tmp/lms_boot.log
   fi
 '
 
+RemainAfterExit=true
+
 [Install]
 WantedBy=multi-user.target
+
 
 """
     with open(SERVICE_PATH, "w") as f:
