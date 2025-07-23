@@ -24,15 +24,16 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-Description=Start LMS on boot if STARTUP=true
-After=network.target
+Description=Start LMS launcher if STARTUP=true
+After=multi-user.target network-online.target systemd-udevd.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=true
 ExecStart=/bin/bash -c '
-  CONFIG_PATH="{CONFIG_PATH}"
-  LAUNCHER="{LAUNCHER_PATH}"
+  CONFIG_PATH="/home/pi/AP_mode_wordpress_launcher/launch_settings.conf"
+  LAUNCHER="/home/pi/AP_mode_wordpress_launcher/launch.sh"
 
   if [[ "$(grep STARTUP "$CONFIG_PATH" | cut -d "=" -f2)" == "true" ]]; then
     echo "Startup flag enabled — launching LMS..."
@@ -48,6 +49,7 @@ ExecStart=/bin/bash -c '
 
 [Install]
 WantedBy=multi-user.target
+
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
