@@ -357,6 +357,7 @@ def start_ap_services():
         return
     run("pkill -f 'hostapd.*uap0'", check=False)
     log_info("Starting hostapd...")
+    run("sudo systemctl unmask hostapd")
     run("sudo systemctl restart hostapd")
 
     log_info("Starting dnsmasq...")
