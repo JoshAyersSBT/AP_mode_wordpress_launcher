@@ -258,7 +258,41 @@ $HTTP["host"] =~ ".*" {
     run(f"ln -sf {redirect_conf} /etc/lighttpd/conf-enabled/")
     run("systemctl restart lighttpd")
 
+def force_apache_global_defaults():
+    log_info("Enforcing Apache global default DocumentRoot and ServerName...")
 
+    # Step 1: Set ServerName in apache2.conf
+    apache_conf = "/etc/apache2/apache2.conf"
+    with open(apache_conf, "r") as f:
+        lines = f.readlines()
+    if not any("ServerName" in line for line in lines):
+        with open(apache_conf, "a") as f:
+            f.write("\nServerName localhost\n")
+        log_success("Added ServerName to apache2.conf")
+
+    # Step 2: Update 000-default.conf DocumentRoot
+    default_conf = "/etc/apache2/sites-available/000-default.conf"
+    new_lines = []
+    found = False
+    with open(default_conf, "r") as f:
+        for line in f:
+            if "DocumentRoot" in line:
+                new_lines.append("    DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal\n")
+                found = True
+            else:
+                new_lines.append(line)
+    if found:
+        with open(default_conf, "w") as f:
+            f.writelines(new_lines)
+        log_success("Updated DocumentRoot in 000-default.conf")
+    else:
+        log_warn("DocumentRoot line not found in 000-default.conf")
+
+    # Step 3: Enable 000-default.conf
+    run("sudo a2ensite 000-default.conf", check=False)
+
+    # Step 4: Restart Apache
+    run("systemctl restart apache2")
 def configure_apache_for_wordpress():
     log_info("Configuring Apache to serve WordPress...")
 
@@ -278,9 +312,9 @@ def configure_apache_for_wordpress():
     # Write Apache VirtualHost config
     apache_conf = f"""\
 <VirtualHost *:80>
-    ServerName learning.betabox
-    ServerAlias 192.168.50.1
+    ServerName localhost
     ServerAlias *
+    ServerAdmin webmaster@localhost
 
     DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
 
@@ -289,8 +323,10 @@ def configure_apache_for_wordpress():
         AllowOverride All
         Require all granted
     </Directory>
-</VirtualHost>
 
+    ErrorLog ${APACHE_LOG_DIR}/pipress_error.log
+    CustomLog ${APACHE_LOG_DIR}/pipress_access.log combined
+</VirtualHost>
 
 """
 
@@ -354,7 +390,9 @@ def main():
     configure_hostapd()
     configure_dnsmasq()
     update_etc_hosts()
+    
     configure_apache_for_wordpress()
+    force_apache_global_defaults()
     start_ap_services()
     #ensure_lighttpd_installed()
     #configure_lighttpd_redirect()
