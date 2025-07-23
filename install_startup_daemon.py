@@ -24,9 +24,11 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-Description=Start LMS launcher with retries at boot
-After=network-online.target systemd-udevd.service
-Wants=network-online.target
+[Unit]
+Description=Start LMS launcher with retries after all other services
+After=network-online.target multi-user.target systemd-udevd.service hostapd.service dnsmasq.service
+Requires=network-online.target
+Wants=multi-user.target
 
 [Service]
 Type=simple
