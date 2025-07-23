@@ -279,6 +279,9 @@ def configure_apache_for_wordpress():
     apache_conf = f"""\
 <VirtualHost *:80>
     ServerName learning.betabox
+    ServerAlias 192.168.50.1
+    ServerAlias *
+
     DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
 
     <Directory /AP_mode_wordpress_launcher/www/captive-portal>
@@ -286,9 +289,8 @@ def configure_apache_for_wordpress():
         AllowOverride All
         Require all granted
     </Directory>
-
-    
 </VirtualHost>
+
 
 """
 
