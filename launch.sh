@@ -254,7 +254,6 @@ SSID=${CURRENT_SSID:-BetaBox1}
 WAP_PASSPHRASE=${CURRENT_PASS:-BetaBox1}
 EOF
 
-EOF
                         echo -e "${GREEN}[SUCCESS]${NC} Settings saved. If you have changed SSID or WAP_Password please restart your system."
                         exit 0
                         ;;
