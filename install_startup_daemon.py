@@ -24,19 +24,21 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-[Unit]
-Description=Start LMS launcher with retries after all other services
-After=network-online.target multi-user.target systemd-udevd.service hostapd.service dnsmasq.service
+Description=Start LMS launcher with retries after all services
+After=multi-user.target network-online.target systemd-udevd.service hostapd.service dnsmasq.service
 Requires=network-online.target
 Wants=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash /AP_mode_wordpress_launcher/launch_wrapper.sh
+ExecStart=/bin/bash /home/pi/AP_mode_wordpress_launcher/launch_wrapper.sh
 RemainAfterExit=true
+StandardOutput=journal
+StandardError=journal
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
+
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
