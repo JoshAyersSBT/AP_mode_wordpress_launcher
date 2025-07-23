@@ -354,15 +354,29 @@ def start_ap_services():
         time.sleep(0.5)
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
-        return
+        raise RuntimeError("uap0 interface missing")
+
     run("pkill -f 'hostapd.*uap0'", check=False)
     log_info("Starting hostapd...")
     run("sudo systemctl unmask hostapd")
     run("sudo systemctl enable hostapd")
     run("sudo systemctl restart hostapd")
 
-    log_info("Starting dnsmasq...")
-    run("systemctl restart dnsmasq")
+    log_info("Starting dnsmasq with retry logic...")
+    max_retries = 10
+    for attempt in range(1, max_retries + 1):
+        run("systemctl restart dnsmasq")
+        result = subprocess.run(["systemctl", "is-active", "--quiet", "dnsmasq"])
+        if result.returncode == 0:
+            log_success(f"dnsmasq is running (attempt {attempt}).")
+            return
+        else:
+            log_warn(f"dnsmasq failed to start (attempt {attempt}/{max_retries}). Retrying...")
+            time.sleep(1)
+
+    log_error(f"dnsmasq failed to start after {max_retries} attempts.")
+    raise RuntimeError("dnsmasq startup failed")
+
 
 # Main
 def main():
