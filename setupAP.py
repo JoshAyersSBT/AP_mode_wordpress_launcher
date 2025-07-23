@@ -287,8 +287,8 @@ def configure_apache_for_wordpress():
         Require all granted
     </Directory>
 
-    ErrorLog $${{APACHE_LOG_DIR}}/pipress_error.log
-    CustomLog $${{APACHE_LOG_DIR}}/pipress_access.log combined
+    ErrorLog ${{APACHE_LOG_DIR}}/pipress_error.log
+    CustomLog ${{APACHE_LOG_DIR}}/pipress_access.log combined
 </VirtualHost>
 """
 
