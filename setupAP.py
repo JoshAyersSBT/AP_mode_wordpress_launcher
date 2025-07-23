@@ -268,9 +268,9 @@ def configure_apache_for_wordpress():
     # Ensure WordPress directory exists
     if not os.path.exists(wp_path):
         log_warn("WordPress directory not found, downloading...")
-        run(f"mkdir -p /AP_mode_wordpress_launcher/www")
+        run(f"mkdir -p /AP_mode_wordpress_launcher/www/captive")
         run(f"wget -q https://wordpress.org/latest.tar.gz -O /tmp/wordpress.tar.gz")
-        run(f"tar -xzf /tmp/wordpress.tar.gz -C /AP_mode_wordpress_launcher/www/")
+        run(f"tar -xzf /tmp/wordpress.tar.gz -C /AP_mode_wordpress_launcher/www/captive-portal")
         run("rm /tmp/wordpress.tar.gz")
         log_success("WordPress downloaded and extracted.")
 
