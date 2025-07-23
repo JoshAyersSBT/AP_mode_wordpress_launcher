@@ -296,7 +296,7 @@ def configure_apache_for_wordpress():
         f.write(apache_conf)
 
     run("sudo a2dissite 000-default.conf",check=False)
-    run("a2ensite pipress.conf", check=False)
+    run("sudo a2ensite pipress.conf", check=False)
     run("systemctl restart apache2", check=True)
 
     log_success("Apache configured to serve WordPress at learning.betabox")
