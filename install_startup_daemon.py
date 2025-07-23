@@ -7,8 +7,8 @@ from subprocess import run
 SERVICE_NAME = "lms-launch.service"
 USER = getpass.getuser()
 HOME = str(Path.home())
-LAUNCHER_PATH = f"/AP_mode_wordpress_launcher/launch.sh"
-CONFIG_PATH = f"/AP_mode_wordpress_launcher/launch_settings.conf"
+LAUNCHER_PATH = f"{HOME}/AP_mode_wordpress_launcher/launch.sh"
+CONFIG_PATH = f"{HOME}/AP_mode_wordpress_launcher/launch_settings.conf"
 SERVICE_PATH = f"/etc/systemd/system/{SERVICE_NAME}"
 
 def status(msg, level="INFO"):
@@ -20,16 +20,6 @@ def status(msg, level="INFO"):
     }.get(level, "\033[0m")
     print(f"{color}[{level}] {msg}\033[0m")
 
-def check_flag():
-    if not os.path.exists(CONFIG_PATH):
-        status(f"Config file not found at {CONFIG_PATH}", "ERROR")
-        return False
-    with open(CONFIG_PATH, "r") as f:
-        for line in f:
-            if line.strip().startswith("STARTUP"):
-                return line.strip().split("=")[1].lower() == "true"
-    return False
-
 def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
@@ -38,10 +28,23 @@ Description=Start LMS on boot if STARTUP=true
 After=network.target
 
 [Service]
-Type=simple
-ExecStart=/bin/bash -c '[[ "$(grep STARTUP {CONFIG_PATH} | cut -d "=" -f2)" == "true" ]] && sudo bash {LAUNCHER_PATH}'
-WorkingDirectory={HOME}/AP_mode_wordpress_launcher
+Type=oneshot
 RemainAfterExit=true
+ExecStart=/bin/bash -c '
+  CONFIG_PATH="{CONFIG_PATH}"
+  LAUNCHER="{LAUNCHER_PATH}"
+
+  if [[ "$(grep STARTUP "$CONFIG_PATH" | cut -d "=" -f2)" == "true" ]]; then
+    echo "Startup flag enabled — launching LMS..."
+    until bash "$LAUNCHER"; do
+      echo "LMS failed to start — retrying in 5 seconds..."
+      sleep 5
+    done
+    echo "LMS successfully started."
+  else
+    echo "Startup flag disabled — skipping launch."
+  fi
+'
 
 [Install]
 WantedBy=multi-user.target
@@ -57,7 +60,7 @@ def enable_service():
     status(f"Enabled {SERVICE_NAME} to run on startup.", "SUCCESS")
 
 def main():
-    if not os.geteuid() == 0:
+    if os.geteuid() != 0:
         status("Please run this script as root (sudo).", "ERROR")
         return
     if not os.path.exists(LAUNCHER_PATH):
