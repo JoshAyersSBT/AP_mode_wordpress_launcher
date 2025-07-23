@@ -392,11 +392,11 @@ def main():
     if not is_connected():
         if not attempt_reconnect():
             log_error("Could not connect to internet.")
-            return
+
 
     if not test_internet():
-        log_error("Internet unavailable. Aborting.")
-        return
+        log_error("Internet unavailable. starting in AP mode without passthrough.")
+
 
     log_success("Internet confirmed. Starting AP setup.")
     create_ap_interface()
