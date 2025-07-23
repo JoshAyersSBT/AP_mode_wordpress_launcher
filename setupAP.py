@@ -279,17 +279,17 @@ def configure_apache_for_wordpress():
     apache_conf = f"""\
 <VirtualHost *:80>
     ServerName learning.betabox
-    DocumentRoot {wp_path}
+    DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
 
-    <Directory {wp_path}>
+    <Directory /AP_mode_wordpress_launcher/www/captive-portal>
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
 
-    ErrorLog ${{APACHE_LOG_DIR}}/pipress_error.log
-    CustomLog ${{APACHE_LOG_DIR}}/pipress_access.log combined
+    
 </VirtualHost>
+
 """
 
     with open(apache_conf_path, "w") as f:
