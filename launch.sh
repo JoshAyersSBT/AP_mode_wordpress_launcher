@@ -62,15 +62,25 @@ BLUE='\033[1;34m'
 NC='\033[0m'  # No Color
 
 # Load settings if config file exists
-if [ -f "$CONFIG_FILE" ]; then
-    while IFS='=' read -r key val; do
-        case $key in
-            USE_LOCAL|FAST_LAUNCH|VERBOSE|SSID|WAP_PASSPHRASE|CAPTIVEPORTAL)
-                eval "$key=\"$val\""
-                ;;
-        esac
-    done < <(grep -v '^\s*#' "$CONFIG_FILE" | grep '=')
-fi
+current_section=""
+while IFS='=' read -r key val; do
+    key=$(echo "$key" | xargs)
+    val=$(echo "$val" | xargs)
+    if [[ "$key" == \[*\] ]]; then
+        current_section="${key//[\[\]]/}"
+        continue
+    fi
+
+    case "$current_section.$key" in
+        SETTINGS.USE_LOCAL) USE_LOCAL="$val" ;;
+        SETTINGS.FAST_LAUNCH) FAST_LAUNCH="$val" ;;
+        SETTINGS.VERBOSE) VERBOSE="$val" ;;
+        SETTINGS.CAPTIVEPORTAL) CAPTIVEPORTAL="$val" ;;
+        NETWORK.SSID) SSID="$val" ;;
+        NETWORK.WAP_PASSPHRASE) WAP_PASSPHRASE="$val" ;;
+    esac
+done < "$CONFIG_FILE"
+
 
 TOTAL_STEPS=8
 CURRENT_STEP=0
@@ -231,12 +241,19 @@ for arg in "$@"; do
                         [ -n "$new_pass" ] && CURRENT_PASS="$new_pass"
                         ;;
                     7)
-                        cat <<EOF > "$CONFIG_FILE"
+cat <<EOF > "$CONFIG_FILE"
+[SETTINGS]
 USE_LOCAL=$USE_LOCAL
 FAST_LAUNCH=$FAST_LAUNCH
 VERBOSE=$VERBOSE
+CAPTIVEPORTAL=${CAPTIVEPORTAL:-false}
+FTI=true
+
+[NETWORK]
 SSID=${CURRENT_SSID:-BetaBox1}
 WAP_PASSPHRASE=${CURRENT_PASS:-BetaBox1}
+EOF
+
 EOF
                         echo -e "${GREEN}[SUCCESS]${NC} Settings saved. If you have changed SSID or WAP_Password please restart your system."
                         exit 0
