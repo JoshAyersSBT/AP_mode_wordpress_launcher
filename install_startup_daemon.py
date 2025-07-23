@@ -7,8 +7,8 @@ from subprocess import run
 SERVICE_NAME = "lms-launch.service"
 USER = getpass.getuser()
 HOME = str(Path.home())
-LAUNCHER_PATH = f"{HOME}/AP_mode_wordpress_launcher/launch.sh"
-CONFIG_PATH = f"{HOME}/AP_mode_wordpress_launcher/launch_settings.conf"
+LAUNCHER_PATH = f"/AP_mode_wordpress_launcher/launch.sh"
+CONFIG_PATH = f"/AP_mode_wordpress_launcher/launch_settings.conf"
 SERVICE_PATH = f"/etc/systemd/system/{SERVICE_NAME}"
 
 def status(msg, level="INFO"):
