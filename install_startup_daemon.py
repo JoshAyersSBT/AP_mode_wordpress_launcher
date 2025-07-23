@@ -5,7 +5,7 @@ from pathlib import Path
 
 SERVICE_NAME = "lms.service"
 SERVICE_PATH = f"/etc/systemd/system/{SERVICE_NAME}"
-LMS_BINARY = "/AP_mode_wordpress_launcher/launch.sh"
+LMS_BINARY = "/AP_mode_wordpress_launcher/launch_wrapper.sh"
 
 def status(msg, level="INFO"):
     color = {
