@@ -1,8 +1,8 @@
 #!/bin/bash
 
 LOG_FILE="/tmp/lms_boot.log"
-CONFIG_PATH="/home/pi/AP_mode_wordpress_launcher/launch_settings.conf"
-LAUNCHER="/home/pi/AP_mode_wordpress_launcher/launch.sh"
+CONFIG_PATH="/AP_mode_wordpress_launcher/launch_settings.conf"
+LAUNCHER="/AP_mode_wordpress_launcher/launch.sh"
 
 echo "[BOOT] LMS service launching at $(date)" >> "$LOG_FILE"
 
