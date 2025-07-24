@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 USER = "pi"  # Replace if needed
-LMS_GUI_PATH = "/home/pi/AP_mode_wordpress_launcher/lms_launcher.py"
+LMS_GUI_PATH = "/AP_mode_wordpress_launcher/lms_launcher.py"
 X_SESSION_DIR = "/tmp/.X11-unix"
 XAUTH_PATH = f"/home/{USER}/.Xauthority"
 
