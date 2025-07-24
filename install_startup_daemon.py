@@ -32,9 +32,7 @@ Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=graphical.target
-
-
+WantedBy=default.target
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
