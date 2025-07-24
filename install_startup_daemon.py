@@ -25,7 +25,7 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/pi/AP_mode_wordpress_launcher/lms_launcher.py
+ExecStart=/usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py
 User=root
 Group=root
 Restart=always
