@@ -22,18 +22,19 @@ def write_service():
 [Unit]
 Description=GUI LMS launcher with retries
 After=graphical.target network-online.target hostapd.service dnsmasq.service apache2.service
-Wants=network-online.target
+Wants=graphical.target network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py
-User=root
+User=pi
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/usr/bin/python3 /home/pi/AP_mode_wordpress_launcher/lms_launcher.py
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=graphical.target
+
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
