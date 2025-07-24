@@ -25,7 +25,7 @@ After=graphical.target network-online.target hostapd.service dnsmasq.service apa
 Wants=graphical.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/AP_mode_wordpress_launcher/lms_gui_entry.py
+ExecStart=/usr/bin/python3 /AP_mode_wordpress_launcher/lms_gui_entry.py
 User=root
 Group=root
 Restart=always
