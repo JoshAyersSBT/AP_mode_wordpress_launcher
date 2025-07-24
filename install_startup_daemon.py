@@ -20,24 +20,20 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-Description=Launch LMS server with auto-retry at boot
-After=multi-user.target network-online.target systemd-udevd.service
+Description=GUI LMS launcher with retries
+After=graphical.target network-online.target hostapd.service dnsmasq.service apache2.service
 Wants=network-online.target
 
 [Service]
-Type=simple
-ExecStart=/bin/bash -c '
-  until sudo {LMS_BINARY}; do
-    echo "[LMS] LMS failed to start. Retrying in 5 seconds..." >> /tmp/lms_launch.log
-    sleep 5
-  done
-  echo "[LMS] LMS is now running." >> /tmp/lms_launch.log
-'
+ExecStart=/usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py
+User=root
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
 Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
