@@ -20,15 +20,14 @@ def write_service():
     status("Writing systemd service file...")
     service_contents = f"""\
 [Unit]
-Description=GUI LMS launcher with retries
+Description=Root GUI LMS launcher with retry
 After=graphical.target network-online.target hostapd.service dnsmasq.service apache2.service
-Wants=graphical.target network-online.target
+Wants=graphical.target
 
 [Service]
-User=pi
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/usr/bin/python3 /home/pi/AP_mode_wordpress_launcher/lms_launcher.py
+ExecStart=/usr/bin/python3 /home/pi/AP_mode_wordpress_launcher/lms_gui_entry.py
+User=root
+Group=root
 Restart=on-failure
 RestartSec=5
 

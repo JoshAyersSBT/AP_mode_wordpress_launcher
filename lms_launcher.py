@@ -8,6 +8,7 @@ from pathlib import Path
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]  # Replace with actual path to LMS
 
+
 class LMSLauncherGUI:
     def __init__(self, root):
         self.root = root
