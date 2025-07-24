@@ -37,18 +37,6 @@ while ! iw list >/dev/null 2>&1; do
 done
 echo "[OK] iw is responsive." >> "$LOG_FILE"
 
-# --- Launch LMS ---
-if [[ "$(grep STARTUP "$CONFIG_PATH" | cut -d "=" -f2)" == "true" ]]; then
-  echo "[INFO] STARTUP=true. Beginning LMS launch loop..." >> "$LOG_FILE"
-  until bash "$LAUNCHER"; do
-    echo "[RETRY] LMS launch failed. Retrying in 5 seconds..." >> "$LOG_FILE"
-    sleep 5
-  done
-  echo "[SUCCESS] LMS successfully started at $(date)" >> "$LOG_FILE"
-else
-  echo "[SKIP] STARTUP flag is not set. Skipping LMS launch." >> "$LOG_FILE"
-  exit 0
-fi
 
 # --- Launch terminal to display LMS status ---
 TERMINAL=$(command -v lxterminal || command -v x-terminal-emulator || command -v gnome-terminal)
