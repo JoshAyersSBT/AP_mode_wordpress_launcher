@@ -25,6 +25,8 @@ def wait_for_services(timeout=30):
         print("Waiting on:", ", ".join(s for s in REQUIRED_SERVICES if not service_running(s)))
         time.sleep(1)
     return False
+def is_service_active(service_name):
+    return subprocess.run(["systemctl", "is-active", "--quiet", service_name]).returncode == 0
 
 
 class LMSLauncherGUI:
