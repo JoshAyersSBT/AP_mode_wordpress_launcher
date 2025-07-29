@@ -21,7 +21,8 @@ def write_service():
     service_contents = f"""\
 [Unit]
 Description=Headless LMS launcher after user login
-After=default.target
+After=network-online.target hostapd.service dnsmasq.service apache2.service
+Requires=hostapd.service dnsmasq.service apache2.service
 
 [Service]
 Type=simple
@@ -33,7 +34,8 @@ RestartSec=5
 SuccessExitStatus=0 1
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
+
 
 """
     with open(SERVICE_PATH, "w") as f:
