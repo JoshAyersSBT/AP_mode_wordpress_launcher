@@ -4,6 +4,8 @@ import time
 import tkinter as tk
 from tkinter import ttk
 from pathlib import Path
+import os
+import sys
 
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]  # Replace with actual path to LMS
@@ -66,14 +68,38 @@ class LMSLauncherGUI:
         else:
             self.try_start_lms()
 
+
+def headless_fallback():
+    print("[LMS Headless Launcher] Starting in non-GUI mode...")
+    for attempt in range(10):
+        missing = [svc for svc in SERVICES if subprocess.run(["systemctl", "is-active", "--quiet", svc]).returncode != 0]
+        if not missing:
+            print("✅ All services are active. Launching LMS...")
+            result = subprocess.run(LMS_CMD)
+            if result.returncode == 0:
+                print("✅ LMS started successfully.")
+                return
+            else:
+                print("❌ LMS failed to start. Retrying...")
+        else:
+            print(f"Waiting on: {', '.join(missing)}")
+        time.sleep(3)
+    print("❌ LMS failed to start after multiple attempts.")
+
+
 def main():
     if not (Path("/usr/bin/sudo").exists() and Path(LMS_CMD[-1]).exists()):
         print("Missing sudo or LMS binary.")
         return
 
+    if os.environ.get("DISPLAY", "") == "":
+        headless_fallback()
+        return
+
     root = tk.Tk()
     app = LMSLauncherGUI(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
