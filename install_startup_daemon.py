@@ -21,12 +21,12 @@ def write_service():
     service_contents = f"""\
 [Unit]
 Description=Headless LMS launcher after user login
-After=network-online.target hostapd.service dnsmasq.service apache2.service
-Requires=hostapd.service dnsmasq.service apache2.service
+After=network-online.target multi-user.target
+Wants=hostapd.service dnsmasq.service apache2.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py
+ExecStart=/bin/bash -c 'sleep 15 && /usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py'
 User=root
 Group=root
 Restart=always
@@ -35,6 +35,7 @@ SuccessExitStatus=0 1
 
 [Install]
 WantedBy=multi-user.target
+
 
 
 """
