@@ -66,8 +66,7 @@ class LMSLauncherGUI:
 
         self.log_box = tk.Text(root, height=6, width=50, font=("Courier", 10))
         self.log_box.pack(pady=5)
-        self.log_box.insert("end", "Starting required services...
-")
+        self.log_box.insert("end", "Starting required services...")
         self.log_box.configure(state="disabled")
 
         self.network_setup_done = False
