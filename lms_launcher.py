@@ -9,29 +9,29 @@ import sys
 
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]
+SETUP_AP_SCRIPT = "/AP_mode_wordpress_launcher/setupAP.py"
+INTERFACE = "uap0"
 
 def is_service_active(service_name):
     try:
         result = subprocess.run(["systemctl", "is-active", "--quiet", service_name])
         return result.returncode == 0
     except Exception as e:
-        print(f"[ERROR] Failed to check service {service_name}: {e}")
+        print(f"[ERROR] Failed to check {service_name}: {e}")
         return False
 
 def ensure_service_started(service_name):
     if not is_service_active(service_name):
         print(f"[BOOT] Starting {service_name}...")
-        subprocess.run(["systemctl", "start", service_name])
+        subprocess.run(["systemctl", "restart", service_name])
     return is_service_active(service_name)
 
 def create_ap_interface():
-    setup_script = "/AP_mode_wordpress_launcher/setupAP.py"
-    if not Path(setup_script).exists():
+    if not Path(SETUP_AP_SCRIPT).exists():
         print("[ERROR] setupAP.py not found.")
         return False
-
     print("[BOOT] Running setupAP.py to create uap0...")
-    result = subprocess.run(["/usr/bin/python3", setup_script])
+    result = subprocess.run(["/usr/bin/python3", SETUP_AP_SCRIPT])
     return result.returncode == 0
 
 def wait_for_interface(interface, timeout=10):
@@ -43,12 +43,6 @@ def wait_for_interface(interface, timeout=10):
         time.sleep(1)
     print(f"[ERROR] Interface {interface} did not appear.")
     return False
-
-def setup_network_once():
-    if not create_ap_interface() or not wait_for_interface("uap0"):
-        print("❌ Failed to create uap0 interface.")
-        return False
-    return True
 
 class LMSLauncherGUI:
     def __init__(self, root):
@@ -66,11 +60,10 @@ class LMSLauncherGUI:
 
         self.log_box = tk.Text(root, height=6, width=50, font=("Courier", 10))
         self.log_box.pack(pady=5)
-        self.log_box.insert("end", "Starting required services...")
+        self.log_box.insert("end", "Starting required services...\n")
         self.log_box.configure(state="disabled")
 
-        self.network_setup_done = False
-        self.root.after(1000, self.check_loop)
+        self.root.after(1000, self.boot_sequence)
 
     def append_log(self, msg):
         self.log_box.configure(state="normal")
@@ -79,25 +72,35 @@ class LMSLauncherGUI:
         self.log_box.configure(state="disabled")
         print(msg)
 
-    def check_and_start_services(self):
-        if not self.network_setup_done:
-            self.append_log("[BOOT] Setting up AP interface...")
-            if not setup_network_once():
-                self.append_log("[ERROR] Network setup failed.")
-                return False
-            self.network_setup_done = True
+    def boot_sequence(self):
+        self.append_log("[BOOT] Running setupAP.py...")
+        if not create_ap_interface():
+            self.append_log("[ERROR] Failed to execute setupAP.py.")
+            self.status_label.config(text="Failed to setup AP.")
+            return
+        if not wait_for_interface(INTERFACE):
+            self.append_log("[ERROR] uap0 not detected.")
+            self.status_label.config(text="Missing interface.")
+            return
 
+        self.append_log("[OK] Interface ready. Starting services...")
+        self.root.after(1000, self.check_and_start_services)
+
+    def check_and_start_services(self):
         all_ok = True
         for svc in SERVICES:
             if not ensure_service_started(svc):
-                self.append_log(f"[WARN] {svc} failed to start or isn't active.")
+                self.append_log(f"[WARN] {svc} failed to start.")
                 all_ok = False
-        return all_ok
+        if all_ok:
+            self.try_start_lms()
+        else:
+            self.status_label.config(text="Retrying service startup...")
+            self.root.after(5000, self.check_and_start_services)
 
     def try_start_lms(self):
         self.append_log("All services ready. Launching LMS...")
         self.status_label.config(text="Launching LMS...")
-
         result = subprocess.run(LMS_CMD)
         if result.returncode == 0:
             self.append_log("[STATUS] LMS started successfully.")
@@ -105,44 +108,37 @@ class LMSLauncherGUI:
             self.progress.stop()
             self.root.after(3000, self.root.destroy)
         else:
-            self.append_log(f"[ERROR] LMS failed (code {result.returncode}). Retrying in 5 seconds...")
+            self.append_log(f"[ERROR] LMS failed (code {result.returncode}). Retrying in 5s...")
             self.status_label.config(text="Retrying LMS...")
-            self.root.after(5000, self.check_loop)
-
-    def check_loop(self):
-        if not self.check_and_start_services():
-            self.root.after(3000, self.check_loop)
-        else:
-            self.try_start_lms()
+            self.root.after(5000, self.check_and_start_services)
 
 def headless_fallback():
     print("[LMS Headless Launcher] Starting in non-GUI mode...")
 
-    if not setup_network_once():
+    if not create_ap_interface():
+        print("[ERROR] setupAP.py failed.")
+        return
+    if not wait_for_interface(INTERFACE):
+        print("[ERROR] uap0 not detected.")
         return
 
     max_attempts = 10
     delay = 3
-
     for attempt in range(1, max_attempts + 1):
-        all_started = True
-        for svc in SERVICES:
-            if not ensure_service_started(svc):
-                print(f"[WARN] {svc} failed to start or isn't active.")
-                all_started = False
+        all_started = all(ensure_service_started(svc) for svc in SERVICES)
         if all_started:
-            print("[STATUS] All services are active. Launching LMS...")
+            print("[STATUS] All services active. Launching LMS...")
             result = subprocess.run(LMS_CMD)
             if result.returncode == 0:
                 print("[STATUS] LMS started successfully.")
                 return
             else:
-                print(f"[ERROR] LMS failed to start (exit code {result.returncode}). Retrying...")
+                print(f"[ERROR] LMS failed (code {result.returncode}). Retrying...")
         else:
-            print(f"[WARN] Attempt {attempt}/{max_attempts} — Not all services ready.")
+            print(f"[WARN] Attempt {attempt}/{max_attempts} — Services not ready.")
         time.sleep(delay)
 
-    print("❌ LMS failed to start after multiple attempts.")
+    print("❌ LMS failed after multiple attempts.")
 
 def main():
     if not (Path("/usr/bin/sudo").exists() and Path(LMS_CMD[-1]).exists()):
