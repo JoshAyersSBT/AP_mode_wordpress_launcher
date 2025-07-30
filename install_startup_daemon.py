@@ -21,13 +21,12 @@ def write_service():
     service_contents = f"""\
 [Unit]
 Description=Headless LMS launcher after user login
-After=network-online.target multi-user.target
+After=network-online.target
 Requires=network-online.target
-Wants=hostapd.service dnsmasq.service apache2.service
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'sleep 15 && /usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py'
+ExecStart=/bin/bash -c 'sleep 5 && /usr/bin/python3 /AP_mode_wordpress_launcher/lms_launcher.py'
 User=root
 Group=root
 Restart=always
@@ -35,6 +34,7 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+s
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
