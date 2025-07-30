@@ -10,23 +10,14 @@ import sys
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]  # Replace with actual path to LMS
 
-def service_running(service_name):
+
+def is_service_active(service_name):
     try:
         result = subprocess.run(["systemctl", "is-active", "--quiet", service_name])
         return result.returncode == 0
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] Service check for {service_name} failed: {e}")
         return False
-
-def wait_for_services(timeout=30):
-    start = time.time()
-    while time.time() - start < timeout:
-        if all(service_running(s) for s in REQUIRED_SERVICES):
-            return True
-        print("Waiting on:", ", ".join(s for s in REQUIRED_SERVICES if not service_running(s)))
-        time.sleep(1)
-    return False
-def is_service_active(service_name):
-    return subprocess.run(["systemctl", "is-active", "--quiet", service_name]).returncode == 0
 
 
 class LMSLauncherGUI:
@@ -58,7 +49,7 @@ class LMSLauncherGUI:
         print(msg)
 
     def check_service(self, name):
-        return subprocess.run(["systemctl", "is-active", "--quiet", name]).returncode == 0
+        return is_service_active(name)
 
     def all_services_ready(self):
         return all(self.check_service(svc) for svc in SERVICES)
@@ -74,7 +65,7 @@ class LMSLauncherGUI:
             self.progress.stop()
             self.root.after(3000, self.root.destroy)
         else:
-            self.append_log("[ERROR] LMS failed. Retrying in 5 seconds...")
+            self.append_log(f"[ERROR] LMS failed with code {result.returncode}. Retrying in 5 seconds...")
             self.status_label.config(text="Retrying LMS...")
             self.root.after(5000, self.check_loop)
 
@@ -85,7 +76,6 @@ class LMSLauncherGUI:
             self.root.after(3000, self.check_loop)
         else:
             self.try_start_lms()
-
 
 
 def headless_fallback():
@@ -125,6 +115,7 @@ def main():
     root = tk.Tk()
     app = LMSLauncherGUI(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
