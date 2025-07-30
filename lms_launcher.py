@@ -8,7 +8,7 @@ import os
 import sys
 
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
-LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]  # Replace with actual path to LMS
+LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]
 
 def is_service_active(service_name):
     try:
@@ -24,6 +24,31 @@ def ensure_service_started(service_name):
         subprocess.run(["systemctl", "start", service_name])
     return is_service_active(service_name)
 
+def create_ap_interface():
+    setup_script = "/AP_mode_wordpress_launcher/setupAP.py"
+    if not Path(setup_script).exists():
+        print("[ERROR] setupAP.py not found.")
+        return False
+
+    print("[BOOT] Running setupAP.py to create uap0...")
+    result = subprocess.run(["/usr/bin/python3", setup_script])
+    return result.returncode == 0
+
+def wait_for_interface(interface, timeout=10):
+    print(f"[BOOT] Waiting for interface {interface} to appear...")
+    for _ in range(timeout):
+        if Path(f"/sys/class/net/{interface}").exists():
+            print(f"[OK] Interface {interface} detected.")
+            return True
+        time.sleep(1)
+    print(f"[ERROR] Interface {interface} did not appear.")
+    return False
+
+def setup_network_once():
+    if not create_ap_interface() or not wait_for_interface("uap0"):
+        print("❌ Failed to create uap0 interface.")
+        return False
+    return True
 
 class LMSLauncherGUI:
     def __init__(self, root):
@@ -41,9 +66,11 @@ class LMSLauncherGUI:
 
         self.log_box = tk.Text(root, height=6, width=50, font=("Courier", 10))
         self.log_box.pack(pady=5)
-        self.log_box.insert("end", "Starting required services...")
+        self.log_box.insert("end", "Starting required services...
+")
         self.log_box.configure(state="disabled")
 
+        self.network_setup_done = False
         self.root.after(1000, self.check_loop)
 
     def append_log(self, msg):
@@ -54,6 +81,13 @@ class LMSLauncherGUI:
         print(msg)
 
     def check_and_start_services(self):
+        if not self.network_setup_done:
+            self.append_log("[BOOT] Setting up AP interface...")
+            if not setup_network_once():
+                self.append_log("[ERROR] Network setup failed.")
+                return False
+            self.network_setup_done = True
+
         all_ok = True
         for svc in SERVICES:
             if not ensure_service_started(svc):
@@ -82,9 +116,12 @@ class LMSLauncherGUI:
         else:
             self.try_start_lms()
 
-
 def headless_fallback():
     print("[LMS Headless Launcher] Starting in non-GUI mode...")
+
+    if not setup_network_once():
+        return
+
     max_attempts = 10
     delay = 3
 
@@ -104,11 +141,9 @@ def headless_fallback():
                 print(f"[ERROR] LMS failed to start (exit code {result.returncode}). Retrying...")
         else:
             print(f"[WARN] Attempt {attempt}/{max_attempts} — Not all services ready.")
-
         time.sleep(delay)
 
     print("❌ LMS failed to start after multiple attempts.")
-
 
 def main():
     if not (Path("/usr/bin/sudo").exists() and Path(LMS_CMD[-1]).exists()):
