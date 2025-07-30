@@ -10,23 +10,19 @@ import sys
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]  # Replace with actual path to LMS
 
-def service_running(service_name):
+def is_service_active(service_name):
     try:
         result = subprocess.run(["systemctl", "is-active", "--quiet", service_name])
         return result.returncode == 0
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] Failed to check service {service_name}: {e}")
         return False
 
-def wait_for_services(timeout=30):
-    start = time.time()
-    while time.time() - start < timeout:
-        if all(service_running(s) for s in REQUIRED_SERVICES):
-            return True
-        print("Waiting on:", ", ".join(s for s in REQUIRED_SERVICES if not service_running(s)))
-        time.sleep(1)
-    return False
-def is_service_active(service_name):
-    return subprocess.run(["systemctl", "is-active", "--quiet", service_name]).returncode == 0
+def ensure_service_started(service_name):
+    if not is_service_active(service_name):
+        print(f"[BOOT] Starting {service_name}...")
+        subprocess.run(["systemctl", "start", service_name])
+    return is_service_active(service_name)
 
 
 class LMSLauncherGUI:
@@ -45,7 +41,8 @@ class LMSLauncherGUI:
 
         self.log_box = tk.Text(root, height=6, width=50, font=("Courier", 10))
         self.log_box.pack(pady=5)
-        self.log_box.insert("end", "Waiting for required services...\n")
+        self.log_box.insert("end", "Starting required services...
+")
         self.log_box.configure(state="disabled")
 
         self.root.after(1000, self.check_loop)
@@ -57,11 +54,13 @@ class LMSLauncherGUI:
         self.log_box.configure(state="disabled")
         print(msg)
 
-    def check_service(self, name):
-        return subprocess.run(["systemctl", "is-active", "--quiet", name]).returncode == 0
-
-    def all_services_ready(self):
-        return all(self.check_service(svc) for svc in SERVICES)
+    def check_and_start_services(self):
+        all_ok = True
+        for svc in SERVICES:
+            if not ensure_service_started(svc):
+                self.append_log(f"[WARN] {svc} failed to start or isn't active.")
+                all_ok = False
+        return all_ok
 
     def try_start_lms(self):
         self.append_log("All services ready. Launching LMS...")
@@ -74,18 +73,15 @@ class LMSLauncherGUI:
             self.progress.stop()
             self.root.after(3000, self.root.destroy)
         else:
-            self.append_log("[ERROR] LMS failed. Retrying in 5 seconds...")
+            self.append_log(f"[ERROR] LMS failed (code {result.returncode}). Retrying in 5 seconds...")
             self.status_label.config(text="Retrying LMS...")
             self.root.after(5000, self.check_loop)
 
     def check_loop(self):
-        if not self.all_services_ready():
-            self.append_log("Waiting for services: " +
-                            ", ".join(s for s in SERVICES if not self.check_service(s)))
+        if not self.check_and_start_services():
             self.root.after(3000, self.check_loop)
         else:
             self.try_start_lms()
-
 
 
 def headless_fallback():
@@ -94,23 +90,25 @@ def headless_fallback():
     delay = 3
 
     for attempt in range(1, max_attempts + 1):
-        missing = [svc for svc in SERVICES if not is_service_active(svc)]
-
-        if not missing:
+        all_started = True
+        for svc in SERVICES:
+            if not ensure_service_started(svc):
+                print(f"[WARN] {svc} failed to start or isn't active.")
+                all_started = False
+        if all_started:
             print("[STATUS] All services are active. Launching LMS...")
             result = subprocess.run(LMS_CMD)
             if result.returncode == 0:
                 print("[STATUS] LMS started successfully.")
                 return
             else:
-                print("[ERROR] LMS failed to start (exit code {}). Retrying...".format(result.returncode))
+                print(f"[ERROR] LMS failed to start (exit code {result.returncode}). Retrying...")
         else:
-            print(f"[WARN] Attempt {attempt}/{max_attempts} — Waiting on: {', '.join(missing)}")
+            print(f"[WARN] Attempt {attempt}/{max_attempts} — Not all services ready.")
 
         time.sleep(delay)
 
     print("❌ LMS failed to start after multiple attempts.")
-    return
 
 
 def main():
