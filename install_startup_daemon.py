@@ -22,6 +22,7 @@ def write_service():
 [Unit]
 Description=Headless LMS launcher after user login
 After=network-online.target multi-user.target
+Requires=network-online.target
 Wants=hostapd.service dnsmasq.service apache2.service
 
 [Service]
@@ -31,13 +32,9 @@ User=root
 Group=root
 Restart=always
 RestartSec=5
-SuccessExitStatus=0 1
 
 [Install]
 WantedBy=multi-user.target
-
-
-
 """
     with open(SERVICE_PATH, "w") as f:
         f.write(service_contents)
