@@ -1,86 +1,82 @@
-<!DOCTYPE html>
 
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>PiPress Monitor</title>
-<link href="/static/style.css" rel="stylesheet"/>
+  <meta charset="UTF-8">
+  <title>PiPress System Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.15/dist/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div id="monitor-app">
-<h1>PiPress System Monitor</h1>
-<!-- System Status -->
-<div class="status-box">
-<h2>System Status</h2>
-<div class="gauges">
-<div :key="metric" class="gauge" v-for="metric in ['cpu', 'ram', 'temp']">
-<svg viewbox="0 0 36 36">
-<path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-<path :id="metric + '-circle'" :stroke="status[metric + '_color']" :stroke-dasharray="status[metric + '_percent'] + ', 100'" class="circle" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-<g transform="rotate(90 18 18)">
-<text :id="metric + '-value'" class="percentage" x="18" y="20"></text>
-<text class="label" v-text="metric.toUpperCase()" x="18" y="26"></text>
-</g>
-</svg>
-<pre>{{ status }}</pre></div>
-</div>
-<p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
-</div>
-<!-- Tabbed Panel -->
-<div class="status-box tab-container">
-<div class="tabs">
-<button :class="{ active: tab === 'ApacheTab' }" @click="setTab('ApacheTab')" class="tablink">Apache Control</button>
-<button :class="{ active: tab === 'LauncherTab' }" @click="setTab('LauncherTab')" class="tablink">Launcher Settings</button>
-<button :class="{ active: tab === 'LMSTab' }" @click="setTab('LMSTab')" class="tablink">LMS Settings</button>
-<button :class="{ active: tab === 'CaptiveTab' }" @click="setTab('CaptiveTab')" class="tablink">Captive Portal</button>
-</div>
-<div class="tab-content" v-show="tab === 'ApacheTab'">
-<div class="controls">
-<a href="/control/start"><button>Start</button></a>
-<a href="/control/stop"><button>Stop</button></a>
-<a href="/control/restart"><button>Restart</button></a>
-</div>
-</div>
-<div class="tab-content" v-show="tab === 'LauncherTab'">
-<form action="/update-settings" method="POST">
-<label><input :checked="status.use_local" name="use_local" type="checkbox"/> Use Local</label><br/>
-<label><input :checked="status.fast_launch" name="fast_launch" type="checkbox"/> Fast Launch</label><br/>
-<button type="submit">Save Settings</button>
-</form>
-</div>
-<div class="tab-content" v-show="tab === 'LMSTab'">
-<form action="/update-lms" method="POST">
-<label>LMS Port: <input :value="status.lms_port" name="lms_port" type="text"/></label><br/>
-<label>LMS Directory: <input :value="status.lms_dir" name="lms_dir" type="text"/></label><br/>
-<button type="submit">Save LMS Settings</button>
-</form>
-</div>
-<div class="tab-content" v-show="tab === 'CaptiveTab'">
-<h3>Captive Portal Manager</h3>
-<input @change="handleUpload" multiple="" type="file">
-<button @click="upload">Upload</button>
-<button @click="restore">Restore Default</button>
-<ul>
-<li :key="file" v-for="file in fileList">
-            {{ file }}
-            <button @click="preview(file)">Preview</button>
-</li>
-</ul>
-<div v-if="previewContent">
-<h4>Preview:</h4>
-<pre>{{ previewContent }}</pre>
-</div>
-</input></div>
-</div>
-<!-- Logs -->
-<div class="status-box">
-<h2>Recent Logs</h2>
-<div class="log">
-<pre class="log-content"></pre>
-</div>
-</div>
-</div>
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<script defer="" src="../static/monitor.js"></script>
+  <div id="monitor-app">
+    <h1>PiPress System Monitor</h1>
+
+    <div class="card">
+      <h2>System Status</h2>
+      <div class="status-circles">
+        <div class="circle-container">
+          <svg width="100" height="100">
+            <circle r="45" cx="50" cy="50" fill="none" stroke="#eee" stroke-width="10" />
+            <circle id="cpu-circle" r="45" cx="50" cy="50" fill="none" stroke="#aaa" stroke-width="10" stroke-dasharray="0, 100" transform="rotate(-90 50 50)" />
+          </svg>
+          <div class="circle-label"><span id="cpu-value">0%</span><br>CPU</div>
+        </div>
+        <div class="circle-container">
+          <svg width="100" height="100">
+            <circle r="45" cx="50" cy="50" fill="none" stroke="#eee" stroke-width="10" />
+            <circle id="ram-circle" r="45" cx="50" cy="50" fill="none" stroke="#aaa" stroke-width="10" stroke-dasharray="0, 100" transform="rotate(-90 50 50)" />
+          </svg>
+          <div class="circle-label"><span id="ram-value">0%</span><br>RAM</div>
+        </div>
+        <div class="circle-container">
+          <svg width="100" height="100">
+            <circle r="45" cx="50" cy="50" fill="none" stroke="#eee" stroke-width="10" />
+            <circle id="temp-circle" r="45" cx="50" cy="50" fill="none" stroke="#aaa" stroke-width="10" stroke-dasharray="0, 100" transform="rotate(-90 50 50)" />
+          </svg>
+          <div class="circle-label"><span id="temp-value">0°C</span><br>TEMP</div>
+        </div>
+      </div>
+      <p><strong>Apache Status:</strong> <span id="apache-status">unknown</span></p>
+    </div>
+
+    <div class="tabs">
+      <button @click="setTab('ApacheTab')">Apache Control</button>
+      <button @click="setTab('LauncherTab')">Launcher Settings</button>
+      <button @click="setTab('LMSTab')">LMS Settings</button>
+      <button @click="setTab('CaptiveTab')">Captive Portal</button>
+    </div>
+
+    <div class="tab-content">
+      <div v-show="tab === 'LauncherTab'">
+        <form action="/update-settings" method="POST">
+          <label><input type="checkbox" name="use_local" v-model="status.use_local"> Use Local</label><br/>
+          <label><input type="checkbox" name="fast_launch" v-model="status.fast_launch"> Fast Launch</label><br/>
+          <button type="submit">Save Launcher Settings</button>
+        </form>
+      </div>
+      <div v-show="tab === 'LMSTab'">
+        <form action="/update-lms" method="POST">
+          <label>Port: <input type="text" name="lms_port" v-model="status.lms_port"></label><br/>
+          <label>Directory: <input type="text" name="lms_dir" v-model="status.lms_dir"></label><br/>
+          <button type="submit">Save LMS Settings</button>
+        </form>
+      </div>
+      <div v-show="tab === 'CaptiveTab'">
+        <input type="file" multiple @change="handleUpload"><br/>
+        <button @click="upload">Upload</button>
+        <button @click="restore">Restore Default</button>
+        <ul>
+          <li v-for="file in fileList" :key="file" @click="preview(file)">{{ file }}</li>
+        </ul>
+        <pre>{{ previewContent }}</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Logs</h2>
+      <div class="log-box"><pre class="log-content"></pre></div>
+    </div>
+  </div>
+  <script src="/static/monitor.js"></script>
 </body>
 </html>
