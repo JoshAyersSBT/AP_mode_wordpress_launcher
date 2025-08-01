@@ -33,6 +33,14 @@ h1 {
     height: 120px;
 }
 
+  .gauge text.percentage {
+    font-size: 14px;  /* ↓ reduced from 20px or more */
+  }
+
+  .gauge text.label {
+    font-size: 10px;  /* ↓ reduced from 16px or more */
+  }
+
 svg {
     width: 100%;
     height: 100%;
