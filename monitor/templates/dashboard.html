@@ -130,7 +130,7 @@
           this.loadFiles();
         },
         async preview(file) {
-          const res = await fetch(`/api/captive/preview?file=${file}`);
+          const res = await fetch("/status");
           const json = await res.json();
           this.previewContent = json.content;
         },
