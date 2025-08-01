@@ -81,7 +81,18 @@ def dashboard():
 
 @app.route("/status")
 def status():
-    return jsonify(get_status_info())
+    info = get_status_info()  # this returns CPU, RAM, temp, apache_status, logs
+
+    launch_settings = load_launch_settings()
+    lms_settings = load_lms_settings()
+
+    return jsonify({
+        **info,
+        "use_local": launch_settings["USE_LOCAL"],
+        "fast_launch": launch_settings["FAST_LAUNCH"],
+        "lms_port": lms_settings["LMS_PORT"],
+        "lms_dir": lms_settings["LMS_DIR"]
+    })
 
 @app.route("/control/<action>")
 def control(action):
