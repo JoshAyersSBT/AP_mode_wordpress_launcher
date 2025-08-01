@@ -34,11 +34,11 @@ h1 {
 }
 
   .gauge text.percentage {
-    font-size: 14px;  /* ↓ reduced from 20px or more */
+    font-size: 9px;  /* ↓ reduced from 20px or more */
   }
 
   .gauge text.label {
-    font-size: 10px;  /* ↓ reduced from 16px or more */
+    font-size: 5px;  /* ↓ reduced from 16px or more */
   }
 
 svg {
