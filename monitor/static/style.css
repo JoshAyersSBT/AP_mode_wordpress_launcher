@@ -38,7 +38,7 @@ h1 {
   }
 
   .gauge text.label {
-    font-size: 2px;  /* ↓ reduced from 16px or more */
+    font-size: 4px;  /* ↓ reduced from 16px or more */
   }
 
 svg {
