@@ -3,6 +3,7 @@ import subprocess
 import socket
 import os
 import shutil
+import configparser
 from utils.sysinfo import get_status_info
 
 # Base directory
@@ -79,19 +80,37 @@ def dashboard():
         lms_dir=lms_settings["LMS_DIR"]
     )
 
+
+
+def load_launch_settings():
+    config = configparser.ConfigParser()
+    config.read(SETTINGS_PATH)
+
+    # Ensure sections exist
+    if not config.has_section('SETTINGS'):
+        config.add_section('SETTINGS')
+
+    return {
+        "USE_LOCAL": config.getboolean('SETTINGS', 'USE_LOCAL', fallback=False),
+        "FAST_LAUNCH": config.getboolean('SETTINGS', 'FAST_LAUNCH', fallback=False),
+        "STARTUP": config.getboolean('SETTINGS', 'STARTUP', fallback=False),
+        "VERBOSE": config.getboolean('SETTINGS', 'VERBOSE', fallback=False),
+        "CAPTIVEPORTAL": config.getboolean('SETTINGS', 'CAPTIVEPORTAL', fallback=False),
+        "FTI": config.getboolean('SETTINGS', 'FTI', fallback=False),
+        "SSID": config.get('NETWORK', 'SSID', fallback=''),
+        "WAP_PASSPHRASE": config.get('NETWORK', 'WAP_PASSPHRASE', fallback='')
+    }
+
 @app.route("/status")
 def status():
-    info = get_status_info()  # this returns CPU, RAM, temp, apache_status, logs
-
-    launch_settings = load_launch_settings()
-    lms_settings = load_lms_settings()
+    info = get_status_info()
+    settings = load_launch_settings()
 
     return jsonify({
         **info,
-        "use_local": launch_settings["USE_LOCAL"],
-        "fast_launch": launch_settings["FAST_LAUNCH"],
-        "lms_port": lms_settings["LMS_PORT"],
-        "lms_dir": lms_settings["LMS_DIR"]
+        **settings,
+        "lms_port": load_lms_settings()["LMS_PORT"],
+        "lms_dir": load_lms_settings()["LMS_DIR"]
     })
 
 @app.route("/control/<action>")
@@ -165,7 +184,11 @@ def captive_restore():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
 # -------------------- Entry Point --------------------
+
+
 
 def find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
