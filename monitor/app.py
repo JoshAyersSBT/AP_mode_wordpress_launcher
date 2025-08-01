@@ -25,24 +25,44 @@ DEFAULT_CAPTIVE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'www', 'defau
 # -------------------- Config Helpers --------------------
 
 def load_launch_settings():
-    defaults = {"USE_LOCAL": False, "FAST_LAUNCH": False}
-    if not os.path.isfile(SETTINGS_PATH):
-        return defaults
-    settings = {}
-    with open(SETTINGS_PATH, "r") as f:
-        for line in f:
-            if '=' in line:
-                key, value = line.strip().split("=", 1)
-                settings[key.strip()] = value.strip().lower() == "true"
+    config = configparser.ConfigParser()
+    config.read(SETTINGS_PATH)
+
+    if not config.has_section('SETTINGS'):
+        config.add_section('SETTINGS')
+    if not config.has_section('NETWORK'):
+        config.add_section('NETWORK')
+
     return {
-        "USE_LOCAL": settings.get("USE_LOCAL", False),
-        "FAST_LAUNCH": settings.get("FAST_LAUNCH", False)
+        "USE_LOCAL": config.getboolean('SETTINGS', 'USE_LOCAL', fallback=False),
+        "FAST_LAUNCH": config.getboolean('SETTINGS', 'FAST_LAUNCH', fallback=False),
+        "STARTUP": config.getboolean('SETTINGS', 'STARTUP', fallback=False),
+        "VERBOSE": config.getboolean('SETTINGS', 'VERBOSE', fallback=False),
+        "CAPTIVEPORTAL": config.getboolean('SETTINGS', 'CAPTIVEPORTAL', fallback=False),
+        "FTI": config.getboolean('SETTINGS', 'FTI', fallback=False),
+        "SSID": config.get('NETWORK', 'SSID', fallback=''),
+        "WAP_PASSPHRASE": config.get('NETWORK', 'WAP_PASSPHRASE', fallback='')
     }
 
-def save_launch_settings(use_local, fast_launch):
-    with open(SETTINGS_PATH, "w") as f:
-        f.write(f"USE_LOCAL={'true' if use_local else 'false'}\n")
-        f.write(f"FAST_LAUNCH={'true' if fast_launch else 'false'}\n")
+def save_launch_settings(settings_dict):
+    config = configparser.ConfigParser()
+    config.read(SETTINGS_PATH)
+
+    if not config.has_section('SETTINGS'):
+        config.add_section('SETTINGS')
+    if not config.has_section('NETWORK'):
+        config.add_section('NETWORK')
+
+    for key in ['USE_LOCAL', 'FAST_LAUNCH', 'STARTUP', 'VERBOSE', 'CAPTIVEPORTAL', 'FTI']:
+        config.set('SETTINGS', key, 'true' if settings_dict.get(key) else 'false')
+
+    if 'SSID' in settings_dict:
+        config.set('NETWORK', 'SSID', settings_dict.get('SSID', ''))
+    if 'WAP_PASSPHRASE' in settings_dict:
+        config.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', ''))
+
+    with open(SETTINGS_PATH, 'w') as configfile:
+        config.write(configfile)
 
 def load_lms_settings():
     defaults = {"LMS_PORT": "8080", "LMS_DIR": "/var/www/lms"}
@@ -74,44 +94,16 @@ def dashboard():
     return render_template(
         "dashboard.html",
         status=status,
-        use_local=settings["USE_LOCAL"],
-        fast_launch=settings["FAST_LAUNCH"],
-        lms_port=lms_settings["LMS_PORT"],
-        lms_dir=lms_settings["LMS_DIR"]
+        **settings,
+        **lms_settings
     )
-
-
-
-def load_launch_settings():
-    config = configparser.ConfigParser()
-    config.read(SETTINGS_PATH)
-
-    # Ensure sections exist
-    if not config.has_section('SETTINGS'):
-        config.add_section('SETTINGS')
-
-    return {
-        "USE_LOCAL": config.getboolean('SETTINGS', 'USE_LOCAL', fallback=False),
-        "FAST_LAUNCH": config.getboolean('SETTINGS', 'FAST_LAUNCH', fallback=False),
-        "STARTUP": config.getboolean('SETTINGS', 'STARTUP', fallback=False),
-        "VERBOSE": config.getboolean('SETTINGS', 'VERBOSE', fallback=False),
-        "CAPTIVEPORTAL": config.getboolean('SETTINGS', 'CAPTIVEPORTAL', fallback=False),
-        "FTI": config.getboolean('SETTINGS', 'FTI', fallback=False),
-        "SSID": config.get('NETWORK', 'SSID', fallback=''),
-        "WAP_PASSPHRASE": config.get('NETWORK', 'WAP_PASSPHRASE', fallback='')
-    }
 
 @app.route("/status")
 def status():
     info = get_status_info()
     settings = load_launch_settings()
-
-    return jsonify({
-        **info,
-        **settings,
-        "lms_port": load_lms_settings()["LMS_PORT"],
-        "lms_dir": load_lms_settings()["LMS_DIR"]
-    })
+    lms_settings = load_lms_settings()
+    return jsonify({**info, **settings, **lms_settings})
 
 @app.route("/control/<action>")
 def control(action):
@@ -121,9 +113,18 @@ def control(action):
 
 @app.route("/update-settings", methods=["POST"])
 def update_settings():
-    use_local = 'use_local' in request.form
-    fast_launch = 'fast_launch' in request.form
-    save_launch_settings(use_local, fast_launch)
+    form = request.form
+    settings_dict = {
+        "USE_LOCAL": 'use_local' in form,
+        "FAST_LAUNCH": 'fast_launch' in form,
+        "STARTUP": 'startup' in form,
+        "VERBOSE": 'verbose' in form,
+        "CAPTIVEPORTAL": 'captiveportal' in form,
+        "FTI": 'fti' in form,
+        "SSID": form.get('ssid', ''),
+        "WAP_PASSPHRASE": form.get('wap_passphrase', '')
+    }
+    save_launch_settings(settings_dict)
     return redirect(url_for("dashboard"))
 
 @app.route("/update-lms", methods=["POST"])
@@ -172,23 +173,15 @@ def captive_upload():
 @app.route("/api/captive/restore", methods=["POST"])
 def captive_restore():
     try:
-        # Clear current files
         for f in os.listdir(CAPTIVE_DIR):
             os.remove(os.path.join(CAPTIVE_DIR, f))
-        # Copy from default
         for f in os.listdir(DEFAULT_CAPTIVE_DIR):
-            src = os.path.join(DEFAULT_CAPTIVE_DIR, f)
-            dst = os.path.join(CAPTIVE_DIR, f)
-            shutil.copy2(src, dst)
+            shutil.copy2(os.path.join(DEFAULT_CAPTIVE_DIR, f), os.path.join(CAPTIVE_DIR, f))
         return "Restored"
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
 # -------------------- Entry Point --------------------
-
-
 
 def find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
