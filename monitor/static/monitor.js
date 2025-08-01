@@ -70,7 +70,7 @@ const app = Vue.createApp({
           const valueEl = document.getElementById(`${metric}-value`);
           const circleEl = document.getElementById(`${metric}-circle`);
           if (valueEl) {
-            valueEl.textContent = metric === 'temp' ? `${data.temp_c}°C` : `${data[`${metric}_load`]}%`;
+            valueEl.textContent = metric === 'temp' ? `${data.temp_c}` : `${data[`${metric}_load`]}`;
           }
           if (circleEl) {
             circleEl.setAttribute("stroke-dasharray", `${data[`${metric}_percent`]}, 100`);
