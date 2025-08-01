@@ -51,16 +51,16 @@
 
       <div class="tab-content" v-show="tab === 'LauncherTab'">
         <form method="POST" action="/update-settings">
-          <label><input type="checkbox" name="use_local" :checked="status.use_local"> Use Local</label><br>
-          <label><input type="checkbox" name="fast_launch" :checked="status.fast_launch"> Fast Launch</label><br>
+            <input type="checkbox" name="use_local" v-model="status.use_local">
+            <input type="checkbox" name="fast_launch" v-model="status.fast_launch">            
           <button type="submit">Save Settings</button>
         </form>
       </div>
 
       <div class="tab-content" v-show="tab === 'LMSTab'">
         <form method="POST" action="/update-lms">
-          <label>LMS Port: <input type="text" name="lms_port" :value="status.lms_port"></label><br>
-          <label>LMS Directory: <input type="text" name="lms_dir" :value="status.lms_dir"></label><br>
+            <input type="text" name="lms_port" :value="status.lms_port">
+            <input type="text" name="lms_dir" :value="status.lms_dir">            
           <button type="submit">Save LMS Settings</button>
         </form>
       </div>
