@@ -294,48 +294,37 @@ def force_apache_global_defaults():
     # Step 4: Restart Apache
     run("systemctl restart apache2")
 def configure_apache_for_wordpress():
-    log_info("Configuring Apache to serve WordPress...")
+    log_info("Configuring Apache virtual host for captive portal...")
 
-    wp_path = "/AP_mode_wordpress_launcher/www/wordpress"
     apache_conf_path = "/etc/apache2/sites-available/pipress.conf"
+    apache_conf = """\
+    <VirtualHost *:80>
+        ServerName learning.betabox
+        ServerAlias monitor.betabox
 
-    # Ensure WordPress directory exists
-    if not os.path.exists(wp_path):
-        log_warn("WordPress directory not found, downloading...")
-        run("wget -q https://wordpress.org/latest.tar.gz -O /tmp/wordpress.tar.gz")
-        run("rm -rf /AP_mode_wordpress_launcher/www/wordpress")
-        run("mkdir -p /AP_mode_wordpress_launcher/www/")
-        run("tar -xzf /tmp/wordpress.tar.gz -C /AP_mode_wordpress_launcher/www/")
-        run("rm /tmp/wordpress.tar.gz")
-        log_success("WordPress downloaded and extracted.")
+        DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
 
-    # Write Apache VirtualHost config
-    apache_conf = f"""\
-<VirtualHost *:80>
-    ServerName localhost
-    ServerAlias *
-    ServerAdmin webmaster@localhost
+        <Directory /AP_mode_wordpress_launcher/www/captive-portal>
+            Options FollowSymLinks
+            AllowOverride All
+            Require all granted
+            DirectoryIndex index.html index.php
+        </Directory>
 
-    DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
-
-    <Directory /AP_mode_wordpress_launcher/www/captive-portal>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-
-</VirtualHost>
-
+        ErrorLog ${APACHE_LOG_DIR}/pipress_error.log
+        CustomLog ${APACHE_LOG_DIR}/pipress_access.log combined
+    </VirtualHost>
 """
-
     with open(apache_conf_path, "w") as f:
         f.write(apache_conf)
 
-    run("sudo a2dissite 000-default.conf",check=False)
-    run("sudo a2ensite pipress.conf", check=False)
+    # Ensure rewrite is active and default site is OFF
+    run("a2enmod rewrite", check=False)
+    run("a2dissite 000-default.conf", check=False)
+    run("a2ensite pipress.conf", check=False)
     run("systemctl restart apache2", check=True)
 
-    log_success("Apache configured to serve WordPress at learning.betabox")
+    log_success("Apache now serves the captive portal at http://learning.betabox")
 
 
 
@@ -363,19 +352,21 @@ def start_ap_services():
     run("sudo systemctl restart hostapd")
 
     log_info("Starting dnsmasq with retry logic...")
+    dns_unit = "dnsmasq@uap0.service" if os.path.exists("/etc/systemd/system/dnsmasq@.service") else "dnsmasq"
+
     max_retries = 10
     for attempt in range(1, max_retries + 1):
-        run("systemctl restart dnsmasq")
-        result = subprocess.run(["systemctl", "is-active", "--quiet", "dnsmasq"])
+        run(f"systemctl restart {dns_unit}")
+        # systemctl is-active --quiet works on both units
+        result = subprocess.run(["systemctl", "is-active", "--quiet", dns_unit])
         if result.returncode == 0:
-            log_success(f"dnsmasq is running (attempt {attempt}).")
-            return
-        else:
-            log_warn(f"dnsmasq failed to start (attempt {attempt}/{max_retries}). Retrying...")
-            time.sleep(1)
-
-    log_error(f"dnsmasq failed to start after {max_retries} attempts.")
-    raise RuntimeError("dnsmasq startup failed")
+            log_success(f"{dns_unit} is running (attempt {attempt}).")
+            break
+        log_warn(f"{dns_unit} failed to start (attempt {attempt}/{max_retries}). Retrying...")
+        time.sleep(1)
+    else:
+        log_error(f"{dns_unit} failed to start after {max_retries} attempts.")
+        raise RuntimeError("dnsmasq startup failed")
 
 
 # Main
