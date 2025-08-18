@@ -286,6 +286,35 @@ def favicon():
     # Serve favicon if present to prevent 404 noise
     return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+# ---- Logs endpoint (returns latest N lines) ----
+@app.route("/logs")
+def tail_logs():
+    # Prefer the monitor log; fall back to Apache if needed
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "monitor.log"),
+        "/var/log/apache2/error.log",
+        "/var/log/apache2/access.log",
+    ]
+    path = next((p for p in candidates if os.path.isfile(p)), None)
+    if not path:
+        return jsonify({"logs": "[no log file found]"}), 200
+
+    # Tail last ~200 lines safely
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            # Read up to ~64KB from end
+            read_back = min(size, 64 * 1024)
+            f.seek(-read_back, os.SEEK_END)
+            chunk = f.read().decode("utf-8", errors="replace")
+        # Keep last 200 lines for brevity
+        lines = chunk.splitlines()[-200:]
+        return jsonify({"logs": "\n".join(lines)}), 200
+    except Exception as e:
+        return jsonify({"logs": f"[error reading logs: {e}]"}), 200
+
+
 # -------------------- Entry Point --------------------
 
 if __name__ == "__main__":
