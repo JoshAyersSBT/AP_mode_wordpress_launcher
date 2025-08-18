@@ -4,47 +4,93 @@
   <meta charset="utf-8"/>
   <title>PiPress Monitor</title>
   <link href="/static/style.css" rel="stylesheet"/>
+  <style>
+    /* avoid flash-of-raw-template before Vue mounts */
+    [v-cloak]{display:none}
+    .gauges{display:flex;gap:1rem;flex-wrap:wrap}
+    .gauge{width:160px}
+    .tablink{margin-right:.5rem}
+    .tab-content{margin-top:1rem}
+    .status-box{border:1px solid #ccc;padding:1rem;border-radius:.5rem;margin-bottom:1rem}
+    .controls button{margin-right:.5rem}
+    svg{width:100%;height:auto}
+    .percentage{font-size:6px;text-anchor:middle}
+    .label{font-size:4px;text-anchor:middle}
+    pre.log-content{max-height:240px;overflow:auto}
+  </style>
 </head>
 <body>
+<div id="monitor-app" v-cloak>
   <h1>PiPress System Monitor</h1>
 
   <!-- System Status -->
   <div class="status-box">
     <h2>System Status</h2>
+
     <div class="gauges">
-      <!-- Gauges -->
-      <div class="gauge" v-for="metric in ['cpu', 'ram', 'temp']" :key="metric">
+      <!-- CPU -->
+      <div class="gauge">
         <svg viewBox="0 0 36 36">
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-
           <path class="circle"
-                :id="metric + '-circle'"
-                :stroke="status[metric + '_color']"
-                :stroke-dasharray="status[metric + '_percent'] + ', 100'"
+                :stroke="cpu_color"
+                :stroke-dasharray="cpu_percent + ', 100'"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-
           <g transform="rotate(90 18 18)">
-            <text class="percentage" :id="metric + '-value'" x="18" y="20"></text>
-            <text class="label" :id="metric + '-label'" x="18" y="26" v-text="metric.toUpperCase()"></text>
+            <text class="percentage" x="18" y="20">{{ cpu_load }}</text>
+            <text class="label" x="18" y="26">CPU</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- RAM -->
+      <div class="gauge">
+        <svg viewBox="0 0 36 36">
+          <path class="circle-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+          <path class="circle"
+                :stroke="ram_color"
+                :stroke-dasharray="ram_percent + ', 100'"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+          <g transform="rotate(90 18 18)">
+            <text class="percentage" x="18" y="20">{{ ram_usage }}</text>
+            <text class="label" x="18" y="26">RAM</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- TEMP -->
+      <div class="gauge">
+        <svg viewBox="0 0 36 36">
+          <path class="circle-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+          <path class="circle"
+                :stroke="temp_color"
+                :stroke-dasharray="temp_percent + ', 100'"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+          <g transform="rotate(90 18 18)">
+            <text class="percentage" x="18" y="20">{{ temp_c }}</text>
+            <text class="label" x="18" y="26">TEMP</text>
           </g>
         </svg>
       </div>
     </div>
-    <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
+
+    <p><strong>Apache Status:</strong> {{ apache_status }}</p>
   </div>
 
-  <!-- Tabbed Panel -->
-  <div class="status-box tab-container" id="monitor-app">
+  <!-- Tabs -->
+  <div class="status-box">
     <div class="tabs">
-      <button class="tablink active" @click="setTab('ApacheTab')">Apache Control</button>
-      <button class="tablink" @click="setTab('LauncherTab')">Launcher Settings</button>
-      <button class="tablink" @click="setTab('LMSTab')">LMS Settings</button>
-      <button class="tablink" @click="setTab('CaptiveTab')">Captive Portal</button>
+      <button class="tablink" :class="{active: tab==='ApacheTab'}" @click="tab='ApacheTab'">Apache Control</button>
+      <button class="tablink" :class="{active: tab==='LauncherTab'}" @click="tab='LauncherTab'">Launcher Settings</button>
+      <button class="tablink" :class="{active: tab==='LMSTab'}" @click="tab='LMSTab'">LMS Settings</button>
+      <button class="tablink" :class="{active: tab==='CaptiveTab'}" @click="tab='CaptiveTab'">Captive Portal</button>
     </div>
 
     <!-- Apache -->
-    <div class="tab-content" id="ApacheTab" v-show="tab === 'ApacheTab'">
+    <div class="tab-content" v-show="tab==='ApacheTab'">
       <div class="controls">
         <a href="/control/start"><button type="button">Start</button></a>
         <a href="/control/stop"><button type="button">Stop</button></a>
@@ -53,7 +99,7 @@
     </div>
 
     <!-- Launcher -->
-    <div class="tab-content" id="LauncherTab" v-show="tab === 'LauncherTab'">
+    <div class="tab-content" v-show="tab==='LauncherTab'">
       <form action="/update-settings" method="POST">
         <fieldset>
           <legend>Settings</legend>
@@ -104,7 +150,7 @@
     </div>
 
     <!-- LMS -->
-    <div class="tab-content" id="LMSTab" v-show="tab === 'LMSTab'">
+    <div class="tab-content" v-show="tab==='LMSTab'">
       <form action="/update-lms" method="POST">
         <label>LMS Port: <input type="text" name="lms_port" value="{{ LMS_PORT }}"/></label><br/>
         <label>LMS Directory: <input type="text" name="lms_dir" value="{{ LMS_DIR }}"/></label><br/>
@@ -113,7 +159,7 @@
     </div>
 
     <!-- Captive Portal -->
-    <div class="tab-content" id="CaptiveTab" v-show="tab === 'CaptiveTab'">
+    <div class="tab-content" v-show="tab==='CaptiveTab'">
       <h3>Captive Portal Manager</h3>
       <input type="file" multiple @change="handleUpload">
       <button type="button" @click="upload">Upload</button>
@@ -136,88 +182,84 @@
   <!-- Logs -->
   <div class="status-box">
     <h2>Recent Logs</h2>
-    <div class="log">
-      <pre class="log-content">{{ status.logs }}</pre>
-    </div>
+    <pre class="log-content">{{ logs }}</pre>
   </div>
+</div>
 
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script>
-    const app = Vue.createApp({
-      data() {
-        return {
-          tab: 'ApacheTab',
-          fileList: [],
-          previewContent: '',
-          selectedFiles: [],
-          status: {
-            cpu_load: 0,
-            ram_usage: 0,
-            temp_c: 0,
-            cpu_percent: 0,
-            ram_percent: 0,
-            temp_percent: 0,
-            cpu_color: '#aaa',
-            ram_color: '#aaa',
-            temp_color: '#aaa',
-            apache_status: '',
-            logs: ''
-          }
-        }
-      },
-      methods: {
-        setTab(t) { this.tab = t; },
-        handleUpload(e) { this.selectedFiles = Array.from(e.target.files); },
-        async upload() {
-          if (!this.selectedFiles.length) return;
-          const form = new FormData();
-          this.selectedFiles.forEach(f => form.append("files", f));
-          await fetch("/api/captive/upload", { method: "POST", body: form });
-          this.loadFiles();
-        },
-        async preview(filename) {
-          const res = await fetch(`/api/captive/preview?file=${encodeURIComponent(filename)}`);
-          const json = await res.json();
-          this.previewContent = json.content || '';
-        },
-        async restore() {
-          await fetch("/api/captive/restore", { method: "POST" });
-          this.loadFiles();
-        },
-        async loadFiles() {
-          const res = await fetch("/api/captive/list");
-          this.fileList = await res.json();
-        },
-        async fetchStatus() {
-          const res = await fetch("/status");
-          const data = await res.json();
-          this.status = data;
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const App = {
+  data() {
+    return {
+      tab: 'ApacheTab',
+      // Status model (with safe defaults)
+      cpu_load: 0, ram_usage: 0, temp_c: 0,
+      cpu_percent: 0, ram_percent: 0, temp_percent: 0,
+      cpu_color: '#999', ram_color: '#999', temp_color: '#999',
+      apache_status: '',
+      logs: '',
+      // Captive portal
+      fileList: [],
+      previewContent: '',
+      selectedFiles: []
+    }
+  },
+  methods: {
+    setFromStatus(d){
+      // Safely map whatever keys get_status_info returns
+      this.cpu_load    = d.cpu_load ?? d.cpu ?? this.cpu_load;
+      this.ram_usage   = d.ram_usage ?? d.ram ?? this.ram_usage;
+      this.temp_c      = d.temp_c ?? d.temp ?? this.temp_c;
 
-          for (const m of ['cpu', 'ram', 'temp']) {
-            const val = (m === 'temp') ? data.temp_c : data[`${m}_load`];
-            const circle = document.getElementById(`${m}-circle`);
-            const valueEl = document.getElementById(`${m}-value`);
-            if (valueEl) valueEl.textContent = val;
-            if (circle) {
-              circle.setAttribute("stroke-dasharray", `${data[`${m}_percent`]}, 100`);
-              circle.setAttribute("stroke", data[`${m}_color`]);
-            }
-          }
+      this.cpu_percent = d.cpu_percent ?? d.cpu_usage_percent ?? this.cpu_percent;
+      this.ram_percent = d.ram_percent ?? d.ram_usage_percent ?? this.ram_percent;
+      this.temp_percent= d.temp_percent ?? d.temperature_percent ?? this.temp_percent;
 
-          const apacheEl = document.getElementById("apache-status");
-          if (apacheEl) apacheEl.textContent = data.apache_status || '';
-          const logEl = document.querySelector(".log-content");
-          if (logEl) logEl.textContent = data.logs || '';
-        }
-      },
-      mounted() {
-        this.loadFiles();
-        this.fetchStatus();
-        setInterval(this.fetchStatus, 1000);
-      }
-    });
+      this.cpu_color   = d.cpu_color ?? this.cpu_color;
+      this.ram_color   = d.ram_color ?? this.ram_color;
+      this.temp_color  = d.temp_color ?? this.temp_color;
 
-    app.mount("#monitor-app");
-  </script>
+      this.apache_status = d.apache_status ?? this.apache_status;
+      this.logs = d.logs ?? this.logs;
+    },
+    async fetchStatus(){
+      try{
+        const r = await fetch('/status');
+        if(!r.ok) return;
+        const d = await r.json();
+        this.setFromStatus(d);
+      }catch(e){}
+    },
+    handleUpload(e){ this.selectedFiles = Array.from(e.target.files); },
+    async upload(){
+      if(!this.selectedFiles.length) return;
+      const form = new FormData();
+      this.selectedFiles.forEach(f => form.append('files', f));
+      await fetch('/api/captive/upload', { method:'POST', body: form });
+      this.loadFiles();
+    },
+    async preview(filename){
+      const r = await fetch(`/api/captive/preview?file=${encodeURIComponent(filename)}`);
+      const j = await r.json();
+      this.previewContent = j.content || '';
+    },
+    async restore(){
+      await fetch('/api/captive/restore', { method:'POST' });
+      this.loadFiles();
+    },
+    async loadFiles(){
+      const r = await fetch('/api/captive/list');
+      if(!r.ok) return;
+      this.fileList = await r.json();
+    }
+  },
+  mounted(){
+    this.loadFiles();
+    this.fetchStatus();
+    setInterval(this.fetchStatus, 1500);
+  }
+};
+Vue.createApp(App).mount('#monitor-app');
+</script>
 </body>
 </html>
