@@ -5,18 +5,15 @@
   <title>PiPress Monitor</title>
   <link href="/static/style.css" rel="stylesheet"/>
   <style>
-    /* avoid flash-of-raw-template before Vue mounts */
     [v-cloak]{display:none}
     .gauges{display:flex;gap:1rem;flex-wrap:wrap}
     .gauge{width:160px}
-    .tablink{margin-right:.5rem}
-    .tab-content{margin-top:1rem}
     .status-box{border:1px solid #ccc;padding:1rem;border-radius:.5rem;margin-bottom:1rem}
     .controls button{margin-right:.5rem}
     svg{width:100%;height:auto}
     .percentage{font-size:6px;text-anchor:middle}
     .label{font-size:4px;text-anchor:middle}
-    pre.log-content{max-height:240px;overflow:auto}
+    pre.log-content{max-height:420px;overflow:auto;white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -26,7 +23,6 @@
   <!-- System Status -->
   <div class="status-box">
     <h2>System Status</h2>
-
     <div class="gauges">
       <!-- CPU -->
       <div class="gauge">
@@ -34,11 +30,11 @@
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <path class="circle"
-                :stroke="cpu_color"
-                :stroke-dasharray="cpu_percent + ', 100'"
+                :stroke="status.cpu_color"
+                :stroke-dasharray="status.cpu_percent + ', 100'"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ cpu_load }}</text>
+            <text class="percentage" x="18" y="20">{{ status.cpu_load }}</text>
             <text class="label" x="18" y="26">CPU</text>
           </g>
         </svg>
@@ -50,11 +46,11 @@
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <path class="circle"
-                :stroke="ram_color"
-                :stroke-dasharray="ram_percent + ', 100'"
+                :stroke="status.ram_color"
+                :stroke-dasharray="status.ram_percent + ', 100'"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ ram_usage }}</text>
+            <text class="percentage" x="18" y="20">{{ status.ram_usage }}</text>
             <text class="label" x="18" y="26">RAM</text>
           </g>
         </svg>
@@ -66,26 +62,25 @@
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <path class="circle"
-                :stroke="temp_color"
-                :stroke-dasharray="temp_percent + ', 100'"
+                :stroke="status.temp_color"
+                :stroke-dasharray="status.temp_percent + ', 100'"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ temp_c }}</text>
+            <text class="percentage" x="18" y="20">{{ status.temp_c }}</text>
             <text class="label" x="18" y="26">TEMP</text>
           </g>
         </svg>
       </div>
     </div>
-
-    <p><strong>Apache Status:</strong> {{ apache_status }}</p>
+    <p><strong>Apache Status:</strong> {{ status.apache_status }}</p>
   </div>
 
-  <!-- Tabs -->
-  <div class="status-box">
+  <!-- Tabbed Panel -->
+  <div class="status-box tab-container">
     <div class="tabs">
-      <button class="tablink" :class="{active: tab==='ApacheTab'}" @click="tab='ApacheTab'">Apache Control</button>
+      <button class="tablink" :class="{active: tab==='ApacheTab'}"  @click="tab='ApacheTab'">Apache Control</button>
       <button class="tablink" :class="{active: tab==='LauncherTab'}" @click="tab='LauncherTab'">Launcher Settings</button>
-      <button class="tablink" :class="{active: tab==='LMSTab'}" @click="tab='LMSTab'">LMS Settings</button>
+      <button class="tablink" :class="{active: tab==='LMSTab'}"     @click="tab='LMSTab'">LMS Settings</button>
       <button class="tablink" :class="{active: tab==='CaptiveTab'}" @click="tab='CaptiveTab'">Captive Portal</button>
     </div>
 
@@ -179,87 +174,109 @@
     </div>
   </div>
 
-  <!-- Logs -->
+  <!-- Logs (separate section, not a tab) -->
   <div class="status-box">
     <h2>Recent Logs</h2>
-    <pre class="log-content">{{ logs }}</pre>
+    <div style="margin-bottom:.5rem;">
+      <label><input type="checkbox" v-model="followLogs"> Follow (auto-scroll)</label>
+      <button type="button" @click="refreshLogs" style="margin-left:.5rem;">Refresh</button>
+    </div>
+    <div class="log">
+      <pre ref="logbox" class="log-content">{{ logs }}</pre>
+    </div>
   </div>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script>
-const App = {
+const app = Vue.createApp({
   data() {
     return {
       tab: 'ApacheTab',
-      // Status model (with safe defaults)
-      cpu_load: 0, ram_usage: 0, temp_c: 0,
-      cpu_percent: 0, ram_percent: 0, temp_percent: 0,
-      cpu_color: '#999', ram_color: '#999', temp_color: '#999',
-      apache_status: '',
-      logs: '',
-      // Captive portal
       fileList: [],
       previewContent: '',
-      selectedFiles: []
+      selectedFiles: [],
+      // status payload exactly as /status returns it
+      status: {
+        cpu_load: 0,
+        ram_usage: 0,
+        temp_c: 0,
+        cpu_percent: 0,
+        ram_percent: 0,
+        temp_percent: 0,
+        cpu_color: '#aaa',
+        ram_color: '#aaa',
+        temp_color: '#aaa',
+        apache_status: '',
+        logs: '' // fallback if /status includes logs
+      },
+      // dedicated logs model (for /logs endpoint or fallback)
+      logs: '',
+      followLogs: true
     }
   },
   methods: {
-    setFromStatus(d){
-      // Safely map whatever keys get_status_info returns
-      this.cpu_load    = d.cpu_load ?? d.cpu ?? this.cpu_load;
-      this.ram_usage   = d.ram_usage ?? d.ram ?? this.ram_usage;
-      this.temp_c      = d.temp_c ?? d.temp ?? this.temp_c;
-
-      this.cpu_percent = d.cpu_percent ?? d.cpu_usage_percent ?? this.cpu_percent;
-      this.ram_percent = d.ram_percent ?? d.ram_usage_percent ?? this.ram_percent;
-      this.temp_percent= d.temp_percent ?? d.temperature_percent ?? this.temp_percent;
-
-      this.cpu_color   = d.cpu_color ?? this.cpu_color;
-      this.ram_color   = d.ram_color ?? this.ram_color;
-      this.temp_color  = d.temp_color ?? this.temp_color;
-
-      this.apache_status = d.apache_status ?? this.apache_status;
-      this.logs = d.logs ?? this.logs;
-    },
-    async fetchStatus(){
-      try{
-        const r = await fetch('/status');
-        if(!r.ok) return;
-        const d = await r.json();
-        this.setFromStatus(d);
-      }catch(e){}
-    },
-    handleUpload(e){ this.selectedFiles = Array.from(e.target.files); },
-    async upload(){
-      if(!this.selectedFiles.length) return;
+    setTab(t) { this.tab = t; },
+    handleUpload(e) { this.selectedFiles = Array.from(e.target.files); },
+    async upload() {
+      if (!this.selectedFiles.length) return;
       const form = new FormData();
-      this.selectedFiles.forEach(f => form.append('files', f));
-      await fetch('/api/captive/upload', { method:'POST', body: form });
+      this.selectedFiles.forEach(f => form.append("files", f));
+      await fetch("/api/captive/upload", { method: "POST", body: form });
       this.loadFiles();
     },
-    async preview(filename){
-      const r = await fetch(`/api/captive/preview?file=${encodeURIComponent(filename)}`);
-      const j = await r.json();
-      this.previewContent = j.content || '';
+    async preview(filename) {
+      const res = await fetch(`/api/captive/preview?file=${encodeURIComponent(filename)}`);
+      const json = await res.json();
+      this.previewContent = json.content || '';
     },
-    async restore(){
-      await fetch('/api/captive/restore', { method:'POST' });
+    async restore() {
+      await fetch("/api/captive/restore", { method: "POST" });
       this.loadFiles();
     },
-    async loadFiles(){
-      const r = await fetch('/api/captive/list');
-      if(!r.ok) return;
-      this.fileList = await r.json();
+    async loadFiles() {
+      const res = await fetch("/api/captive/list");
+      this.fileList = await res.json();
+    },
+    async fetchStatus() {
+      try {
+        const res = await fetch("/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        this.status = data;
+        // If /status carries logs, show them unless we already have /logs content
+        if (!this.logs && data.logs) {
+          this.logs = data.logs;
+          this.$nextTick(this.autoscroll);
+        }
+      } catch {}
+    },
+    async refreshLogs() {
+      try {
+        const r = await fetch('/logs');     // will work if you added /logs; otherwise it just no-ops
+        if (!r.ok) return;
+        const j = await r.json();
+        this.logs = j.logs || '';
+        this.$nextTick(this.autoscroll);
+      } catch {}
+    },
+    autoscroll() {
+      if (!this.followLogs) return;
+      const box = this.$refs.logbox;
+      if (box) box.scrollTop = box.scrollHeight;
     }
   },
-  mounted(){
+  mounted() {
     this.loadFiles();
     this.fetchStatus();
     setInterval(this.fetchStatus, 1500);
+    // try to pull logs separately if available
+    this.refreshLogs();
+    setInterval(() => this.refreshLogs(), 3000);
   }
-};
-Vue.createApp(App).mount('#monitor-app');
+});
+
+app.mount("#monitor-app");
 </script>
 </body>
 </html>
