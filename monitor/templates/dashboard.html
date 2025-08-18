@@ -1,157 +1,223 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>PiPress Monitor</title>
-<link href="/static/style.css" rel="stylesheet"/>
+  <meta charset="utf-8"/>
+  <title>PiPress Monitor</title>
+  <link href="/static/style.css" rel="stylesheet"/>
 </head>
 <body>
-<h1>PiPress System Monitor</h1>
-<!-- System Status -->
-<div class="status-box">
-<h2>System Status</h2>
-<div class="gauges">
-<!-- Gauges -->
-<div :key="metric" class="gauge" v-for="metric in ['cpu', 'ram', 'temp']">
-<svg viewbox="0 0 36 36">
-<path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-<path :id="metric + '-circle'" :stroke="status[metric + '_color']" :stroke-dasharray="status[metric + '_percent'] + ', 100'" class="circle" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-<g transform="rotate(90 18 18)">
-<text :id="metric + '-value'" class="percentage" x="18" y="20"></text>
-<text :id="metric + '-value'" class="percentage" x="18" y="20"></text>
-<text :id="metric + '-label'" class="label" v-text="metric.toUpperCase()" x="18" y="26"></text>
-</g>
-</svg>
-<pre>{{ status }}</pre></div>
-</div>
-<p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
-</div>
-<!-- Tabbed Panel -->
-<div class="status-box tab-container" id="monitor-app">
-<div class="tabs">
-<button @click="setTab('ApacheTab')" class="tablink active">Apache Control</button>
-<button @click="setTab('LauncherTab')" class="tablink">Launcher Settings</button>
-<button @click="setTab('LMSTab')" class="tablink">LMS Settings</button>
-<button @click="setTab('CaptiveTab')" class="tablink">Captive Portal</button>
-</div>
-<!-- Apache -->
-<div class="tab-content" id="ApacheTab" v-show="tab === 'ApacheTab'">
-<div class="controls">
-<a href="/control/start"><button>Start</button></a>
-<a href="/control/stop"><button>Stop</button></a>
-<a href="/control/restart"><button>Restart</button></a>
-</div>
-</div>
-<!-- Launcher -->
-<div class="tab-content" id="LauncherTab" v-show="tab === 'LauncherTab'">
-<form action="/update-settings" method="POST">
-<label><input type="checkbox" name="use_local" v-model="status.use_local"> Use Local</label><br/>
+  <h1>PiPress System Monitor</h1>
 
-<label><input %}="" %}checked{%="" endif="" fast_launch="" if="" name="fast_launch" type="checkbox" {%=""/> Fast Launch</label><br/>
-<button type="submit">Save Settings</button>
-</form>
-</div>
-<!-- LMS -->
-<div class="tab-content" id="LMSTab" v-show="tab === 'LMSTab'">
-<form action="/update-lms" method="POST">
-<label>LMS Port: <input name="lms_port" type="text" value="{{ lms_port }}"/></label><br/>
-<label>LMS Directory: <input name="lms_dir" type="text" value="{{ lms_dir }}"/></label><br/>
-<button type="submit">Save LMS Settings</button>
-</form>
-</div>
-<!-- Captive Portal -->
-<div class="tab-content" id="CaptiveTab" v-show="tab === 'CaptiveTab'">
-<h3>Captive Portal Manager</h3>
-<input @change="handleUpload" multiple="" type="file">
-<button @click="upload">Upload</button>
-<button @click="restore">Restore Default</button>
-<ul>
-<li :key="file" v-for="file in fileList">
-                    {{ file }}
-                    <button @click="preview(file)">Preview</button>
-</li>
-</ul>
-<div v-if="previewContent">
-<h4>Preview:</h4>
-<pre>{{ previewContent }}</pre>
-</div>
-</input></div>
-</div>
-<!-- Logs -->
-<div class="status-box">
-<h2>Recent Logs</h2>
-<div class="log">
-<pre class="log-content">{{ status.logs }}</pre>
-</div>
-</div>
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<script>
-        const app = Vue.createApp({
-            data() {
-                return {
-                    tab: 'ApacheTab',
-                    fileList: [],
-                    previewContent: '',
-                    selectedFiles: [],
-                    status: {
-                        cpu_load: 0,
-                        ram_usage: 0,
-                        temp_c: 0,
-                        cpu_percent: 0,
-                        ram_percent: 0,
-                        temp_percent: 0,
-                        cpu_color: '#aaa',
-                        ram_color: '#aaa',
-                        temp_color: '#aaa',
-                        apache_status: '',
-                        logs: ''
-                    }
-                }
-            },
-            methods: {
-                setTab(t) { this.tab = t },
-                handleUpload(e) { this.selectedFiles = Array.from(e.target.files) },
-                async upload() {
-                    const form = new FormData();
-                    this.selectedFiles.forEach(f => form.append("files", f));
-                    await fetch("/api/captive/upload", { method: "POST", body: form });
-                    this.loadFiles();
-                },
-                async preview(filename) {
-                    const res = await fetch(`/api/captive/preview?file=${filename}`);
-                    const json = await res.json();
-                    this.previewContent = json.content;
-                },
-                async restore() {
-                    await fetch("/api/captive/restore", { method: "POST" });
-                    this.loadFiles();
-                },
-                async loadFiles() {
-                    const res = await fetch("/api/captive/list");
-                    this.fileList = await res.json();
-                },
-                async fetchStatus() {
-                    const res = await fetch("/status");
-                    const data = await res.json();
-                    this.status = data;
-                    for (const m of ['cpu', 'ram', 'temp']) {
-                        document.getElementById(`${m}-value`).textContent = m === 'temp' ? data.temp_c : data[`${m}_load`];
-                        document.getElementById(`${m}-circle`).setAttribute("stroke-dasharray", `${data[`${m}_percent`]}, 100`);
-                        document.getElementById(`${m}-circle`).setAttribute("stroke", data[`${m}_color`]);
-                    }
-                    document.getElementById("apache-status").textContent = data.apache_status;
-                    document.querySelector(".log-content").textContent = data.logs;
-                }
-            },
-            mounted() {
-                this.loadFiles();
-                this.fetchStatus();
-                setInterval(this.fetchStatus, 1000);
+  <!-- System Status -->
+  <div class="status-box">
+    <h2>System Status</h2>
+    <div class="gauges">
+      <!-- Gauges -->
+      <div class="gauge" v-for="metric in ['cpu', 'ram', 'temp']" :key="metric">
+        <svg viewBox="0 0 36 36">
+          <path class="circle-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+
+          <path class="circle"
+                :id="metric + '-circle'"
+                :stroke="status[metric + '_color']"
+                :stroke-dasharray="status[metric + '_percent'] + ', 100'"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+
+          <g transform="rotate(90 18 18)">
+            <text class="percentage" :id="metric + '-value'" x="18" y="20"></text>
+            <text class="label" :id="metric + '-label'" x="18" y="26" v-text="metric.toUpperCase()"></text>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
+  </div>
+
+  <!-- Tabbed Panel -->
+  <div class="status-box tab-container" id="monitor-app">
+    <div class="tabs">
+      <button class="tablink active" @click="setTab('ApacheTab')">Apache Control</button>
+      <button class="tablink" @click="setTab('LauncherTab')">Launcher Settings</button>
+      <button class="tablink" @click="setTab('LMSTab')">LMS Settings</button>
+      <button class="tablink" @click="setTab('CaptiveTab')">Captive Portal</button>
+    </div>
+
+    <!-- Apache -->
+    <div class="tab-content" id="ApacheTab" v-show="tab === 'ApacheTab'">
+      <div class="controls">
+        <a href="/control/start"><button type="button">Start</button></a>
+        <a href="/control/stop"><button type="button">Stop</button></a>
+        <a href="/control/restart"><button type="button">Restart</button></a>
+      </div>
+    </div>
+
+    <!-- Launcher -->
+    <div class="tab-content" id="LauncherTab" v-show="tab === 'LauncherTab'">
+      <form action="/update-settings" method="POST">
+        <fieldset>
+          <legend>Settings</legend>
+
+          <label>
+            <input type="checkbox" name="use_local" {{ 'checked' if USE_LOCAL else '' }}>
+            Use Local
+          </label><br>
+
+          <label>
+            <input type="checkbox" name="fast_launch" {{ 'checked' if FAST_LAUNCH else '' }}>
+            Fast Launch
+          </label><br>
+
+          <label>
+            <input type="checkbox" name="verbose" {{ 'checked' if VERBOSE else '' }}>
+            Verbose
+          </label><br>
+
+          <label>
+            <input type="checkbox" name="startup" {{ 'checked' if STARTUP else '' }}>
+            Launch on Boot
+          </label><br>
+
+          <label>
+            <input type="checkbox" name="captiveportal" {{ 'checked' if CAPTIVEPORTAL else '' }}>
+            Captive Portal
+          </label><br>
+
+          <label>
+            <input type="checkbox" name="fti" {{ 'checked' if FTI else '' }}>
+            FTI
+          </label><br>
+
+          <label>
+            SSID:
+            <input type="text" name="ssid" value="{{ SSID }}">
+          </label><br>
+
+          <label>
+            Passphrase:
+            <input type="text" name="wap_passphrase" value="{{ WAP_PASSPHRASE }}">
+          </label><br>
+
+          <button type="submit">Save Settings</button>
+        </fieldset>
+      </form>
+    </div>
+
+    <!-- LMS -->
+    <div class="tab-content" id="LMSTab" v-show="tab === 'LMSTab'">
+      <form action="/update-lms" method="POST">
+        <label>LMS Port: <input type="text" name="lms_port" value="{{ LMS_PORT }}"/></label><br/>
+        <label>LMS Directory: <input type="text" name="lms_dir" value="{{ LMS_DIR }}"/></label><br/>
+        <button type="submit">Save LMS Settings</button>
+      </form>
+    </div>
+
+    <!-- Captive Portal -->
+    <div class="tab-content" id="CaptiveTab" v-show="tab === 'CaptiveTab'">
+      <h3>Captive Portal Manager</h3>
+      <input type="file" multiple @change="handleUpload">
+      <button type="button" @click="upload">Upload</button>
+      <button type="button" @click="restore">Restore Default</button>
+
+      <ul>
+        <li v-for="file in fileList" :key="file">
+          {{ file }}
+          <button type="button" @click="preview(file)">Preview</button>
+        </li>
+      </ul>
+
+      <div v-if="previewContent">
+        <h4>Preview:</h4>
+        <pre>{{ previewContent }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="status-box">
+    <h2>Recent Logs</h2>
+    <div class="log">
+      <pre class="log-content">{{ status.logs }}</pre>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script>
+    const app = Vue.createApp({
+      data() {
+        return {
+          tab: 'ApacheTab',
+          fileList: [],
+          previewContent: '',
+          selectedFiles: [],
+          status: {
+            cpu_load: 0,
+            ram_usage: 0,
+            temp_c: 0,
+            cpu_percent: 0,
+            ram_percent: 0,
+            temp_percent: 0,
+            cpu_color: '#aaa',
+            ram_color: '#aaa',
+            temp_color: '#aaa',
+            apache_status: '',
+            logs: ''
+          }
+        }
+      },
+      methods: {
+        setTab(t) { this.tab = t; },
+        handleUpload(e) { this.selectedFiles = Array.from(e.target.files); },
+        async upload() {
+          if (!this.selectedFiles.length) return;
+          const form = new FormData();
+          this.selectedFiles.forEach(f => form.append("files", f));
+          await fetch("/api/captive/upload", { method: "POST", body: form });
+          this.loadFiles();
+        },
+        async preview(filename) {
+          const res = await fetch(`/api/captive/preview?file=${encodeURIComponent(filename)}`);
+          const json = await res.json();
+          this.previewContent = json.content || '';
+        },
+        async restore() {
+          await fetch("/api/captive/restore", { method: "POST" });
+          this.loadFiles();
+        },
+        async loadFiles() {
+          const res = await fetch("/api/captive/list");
+          this.fileList = await res.json();
+        },
+        async fetchStatus() {
+          const res = await fetch("/status");
+          const data = await res.json();
+          this.status = data;
+
+          for (const m of ['cpu', 'ram', 'temp']) {
+            const val = (m === 'temp') ? data.temp_c : data[`${m}_load`];
+            const circle = document.getElementById(`${m}-circle`);
+            const valueEl = document.getElementById(`${m}-value`);
+            if (valueEl) valueEl.textContent = val;
+            if (circle) {
+              circle.setAttribute("stroke-dasharray", `${data[`${m}_percent`]}, 100`);
+              circle.setAttribute("stroke", data[`${m}_color`]);
             }
-        });
+          }
 
-        app.mount("#monitor-app");
-    </script>
+          const apacheEl = document.getElementById("apache-status");
+          if (apacheEl) apacheEl.textContent = data.apache_status || '';
+          const logEl = document.querySelector(".log-content");
+          if (logEl) logEl.textContent = data.logs || '';
+        }
+      },
+      mounted() {
+        this.loadFiles();
+        this.fetchStatus();
+        setInterval(this.fetchStatus, 1000);
+      }
+    });
+
+    app.mount("#monitor-app");
+  </script>
 </body>
 </html>

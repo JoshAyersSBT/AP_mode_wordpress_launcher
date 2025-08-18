@@ -6,70 +6,160 @@ import shutil
 import configparser
 from utils.sysinfo import get_status_info
 
-# Base directory
+# -------------------- Constants & Paths --------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Flask setup
 app = Flask(
     __name__,
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
-# Paths
 SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'launch_settings.conf'))
 LMS_SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'lms_settings.conf'))
 CAPTIVE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'www', 'captive-portal'))
 DEFAULT_CAPTIVE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'www', 'default-captive-portal'))
+PORT_FILE = os.path.join(BASE_DIR, "monitor_port.txt")
 
-# -------------------- Config Helpers --------------------
+# -------------------- Helpers --------------------
+
+TRUE_SET = {"1", "true", "yes", "on"}
+FALSE_SET = {"0", "false", "no", "off"}
+
+def as_bool(v, default=False):
+    """Robust bool coercion from various sources (bool/str/int/None)."""
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return default
+    s = str(v).strip().lower()
+    if s in TRUE_SET:
+        return True
+    if s in FALSE_SET:
+        return False
+    return default
+
+def _ensure_ini_sections(cfg: configparser.ConfigParser):
+    if not cfg.has_section('SETTINGS'):
+        cfg.add_section('SETTINGS')
+    if not cfg.has_section('NETWORK'):
+        cfg.add_section('NETWORK')
+
+def _read_legacy_kv_file(path):
+    """
+    Fallback parser for legacy key=value files without section headers.
+    Returns dict with strings; caller should coerce to bools as needed.
+    """
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    try:
+        with open(path, "r", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    out[k.strip()] = v.strip()
+    except Exception:
+        pass
+    return out
+
+# -------------------- Settings Load/Save --------------------
 
 def load_launch_settings():
-    config = configparser.ConfigParser()
-    config.read(SETTINGS_PATH)
+    """
+    Reads launch_settings.conf supporting both:
+      1) INI with [SETTINGS]/[NETWORK]
+      2) Legacy key=value (no sections)
+    """
+    cfg = configparser.ConfigParser()
+    read_ok = False
+    try:
+        # If file contains no sections ConfigParser will ignore keys; we handle legacy next.
+        cfg.read(SETTINGS_PATH)
+        read_ok = True
+    except configparser.MissingSectionHeaderError:
+        read_ok = False
 
-    if not config.has_section('SETTINGS'):
-        config.add_section('SETTINGS')
-    if not config.has_section('NETWORK'):
-        config.add_section('NETWORK')
-
-    return {
-        "USE_LOCAL": config.getboolean('SETTINGS', 'USE_LOCAL', fallback=False),
-        "FAST_LAUNCH": config.getboolean('SETTINGS', 'FAST_LAUNCH', fallback=False),
-        "STARTUP": config.getboolean('SETTINGS', 'STARTUP', fallback=False),
-        "VERBOSE": config.getboolean('SETTINGS', 'VERBOSE', fallback=False),
-        "CAPTIVEPORTAL": config.getboolean('SETTINGS', 'CAPTIVEPORTAL', fallback=False),
-        "FTI": config.getboolean('SETTINGS', 'FTI', fallback=False),
-        "SSID": config.get('NETWORK', 'SSID', fallback=''),
-        "WAP_PASSPHRASE": config.get('NETWORK', 'WAP_PASSPHRASE', fallback='')
+    # Start with defaults
+    settings = {
+        "USE_LOCAL": False,
+        "FAST_LAUNCH": False,
+        "STARTUP": False,
+        "VERBOSE": False,
+        "CAPTIVEPORTAL": False,
+        "FTI": False,
+        "SSID": "",
+        "WAP_PASSPHRASE": ""
     }
 
+    if read_ok and (cfg.sections()):  # INI mode
+        _ensure_ini_sections(cfg)
+        settings.update({
+            "USE_LOCAL":    cfg.getboolean('SETTINGS', 'USE_LOCAL', fallback=settings["USE_LOCAL"]),
+            "FAST_LAUNCH":  cfg.getboolean('SETTINGS', 'FAST_LAUNCH', fallback=settings["FAST_LAUNCH"]),
+            "STARTUP":      cfg.getboolean('SETTINGS', 'STARTUP', fallback=settings["STARTUP"]),
+            "VERBOSE":      cfg.getboolean('SETTINGS', 'VERBOSE', fallback=settings["VERBOSE"]),
+            "CAPTIVEPORTAL":cfg.getboolean('SETTINGS', 'CAPTIVEPORTAL', fallback=settings["CAPTIVEPORTAL"]),
+            "FTI":          cfg.getboolean('SETTINGS', 'FTI', fallback=settings["FTI"]),
+            "SSID":         cfg.get('NETWORK', 'SSID', fallback=settings["SSID"]),
+            "WAP_PASSPHRASE": cfg.get('NETWORK', 'WAP_PASSPHRASE', fallback=settings["WAP_PASSPHRASE"]),
+        })
+    else:
+        # Legacy mode
+        legacy = _read_legacy_kv_file(SETTINGS_PATH)
+        settings.update({
+            "USE_LOCAL":     as_bool(legacy.get("USE_LOCAL"), settings["USE_LOCAL"]),
+            "FAST_LAUNCH":   as_bool(legacy.get("FAST_LAUNCH"), settings["FAST_LAUNCH"]),
+            "STARTUP":       as_bool(legacy.get("STARTUP"), settings["STARTUP"]),
+            "VERBOSE":       as_bool(legacy.get("VERBOSE"), settings["VERBOSE"]),
+            "CAPTIVEPORTAL": as_bool(legacy.get("CAPTIVEPORTAL"), settings["CAPTIVEPORTAL"]),
+            "FTI":           as_bool(legacy.get("FTI"), settings["FTI"]),
+            "SSID":          legacy.get("SSID", settings["SSID"]),
+            "WAP_PASSPHRASE": legacy.get("WAP_PASSPHRASE", settings["WAP_PASSPHRASE"]),
+        })
+
+    # Final coercion (defensive)
+    for k in ("USE_LOCAL","FAST_LAUNCH","STARTUP","VERBOSE","CAPTIVEPORTAL","FTI"):
+        settings[k] = as_bool(settings[k], False)
+
+    return settings
+
 def save_launch_settings(settings_dict):
-    config = configparser.ConfigParser()
-    config.read(SETTINGS_PATH)
+    """
+    Writes INI with [SETTINGS] and [NETWORK].
+    """
+    cfg = configparser.ConfigParser()
+    if os.path.isfile(SETTINGS_PATH):
+        try:
+            cfg.read(SETTINGS_PATH)
+        except configparser.MissingSectionHeaderError:
+            # If it was legacy, we rebuild fresh.
+            cfg = configparser.ConfigParser()
+    _ensure_ini_sections(cfg)
 
-    if not config.has_section('SETTINGS'):
-        config.add_section('SETTINGS')
-    if not config.has_section('NETWORK'):
-        config.add_section('NETWORK')
-
+    # Booleans
     for key in ['USE_LOCAL', 'FAST_LAUNCH', 'STARTUP', 'VERBOSE', 'CAPTIVEPORTAL', 'FTI']:
-        config.set('SETTINGS', key, 'true' if settings_dict.get(key) else 'false')
+        cfg.set('SETTINGS', key, 'true' if as_bool(settings_dict.get(key)) else 'false')
 
+    # Strings
     if 'SSID' in settings_dict:
-        config.set('NETWORK', 'SSID', settings_dict.get('SSID', ''))
+        cfg.set('NETWORK', 'SSID', settings_dict.get('SSID', '') or '')
     if 'WAP_PASSPHRASE' in settings_dict:
-        config.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', ''))
+        cfg.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', '') or '')
 
     with open(SETTINGS_PATH, 'w') as configfile:
-        config.write(configfile)
+        cfg.write(configfile)
 
 def load_lms_settings():
     defaults = {"LMS_PORT": "8080", "LMS_DIR": "/var/www/lms"}
     if not os.path.isfile(LMS_SETTINGS_PATH):
         return defaults
     settings = {}
-    with open(LMS_SETTINGS_PATH, "r") as f:
+    with open(LMS_SETTINGS_PATH, "r", errors="ignore") as f:
         for line in f:
             if '=' in line:
                 key, value = line.strip().split("=", 1)
@@ -81,16 +171,22 @@ def load_lms_settings():
 
 def save_lms_settings(port, directory):
     with open(LMS_SETTINGS_PATH, "w") as f:
-        f.write(f"LMS_PORT={port.strip()}\n")
-        f.write(f"LMS_DIR={directory.strip()}\n")
+        f.write(f"LMS_PORT={str(port).strip()}\n")
+        f.write(f"LMS_DIR={str(directory).strip()}\n")
 
-# -------------------- Main Routes --------------------
+def find_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+# -------------------- Routes --------------------
 
 @app.route("/")
 def dashboard():
     status = get_status_info()
     settings = load_launch_settings()
     lms_settings = load_lms_settings()
+    # All booleans guaranteed real booleans before reaching Jinja
     return render_template(
         "dashboard.html",
         status=status,
@@ -99,7 +195,7 @@ def dashboard():
     )
 
 @app.route("/status")
-def status():
+def status_api():
     info = get_status_info()
     settings = load_launch_settings()
     lms_settings = load_lms_settings()
@@ -129,17 +225,17 @@ def update_settings():
 
 @app.route("/update-lms", methods=["POST"])
 def update_lms():
-    lms_port = request.form.get("lms_port")
-    lms_dir = request.form.get("lms_dir")
+    lms_port = request.form.get("lms_port", "")
+    lms_dir = request.form.get("lms_dir", "")
     save_lms_settings(lms_port, lms_dir)
     return redirect(url_for("dashboard"))
 
-# -------------------- Captive Portal API --------------------
+# ---- Captive Portal API ----
 
 @app.route("/api/captive/list")
 def captive_list():
     try:
-        files = os.listdir(CAPTIVE_DIR)
+        files = sorted(os.listdir(CAPTIVE_DIR))
         return jsonify(files)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -164,6 +260,7 @@ def captive_upload():
     if 'files' not in request.files:
         return jsonify({"error": "No files uploaded"}), 400
     try:
+        os.makedirs(CAPTIVE_DIR, exist_ok=True)
         for file in request.files.getlist("files"):
             file.save(os.path.join(CAPTIVE_DIR, file.filename))
         return "OK"
@@ -173,6 +270,7 @@ def captive_upload():
 @app.route("/api/captive/restore", methods=["POST"])
 def captive_restore():
     try:
+        os.makedirs(CAPTIVE_DIR, exist_ok=True)
         for f in os.listdir(CAPTIVE_DIR):
             os.remove(os.path.join(CAPTIVE_DIR, f))
         for f in os.listdir(DEFAULT_CAPTIVE_DIR):
@@ -181,16 +279,34 @@ def captive_restore():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# -------------------- Entry Point --------------------
+# ---- Static helpers ----
 
-def find_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
+@app.route('/favicon.ico')
+def favicon():
+    # Serve favicon if present to prevent 404 noise
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+# -------------------- Entry Point --------------------
 
 if __name__ == "__main__":
     port = find_free_port()
-    with open(os.path.join(BASE_DIR, "monitor_port.txt"), "w") as f:
-        f.write(str(port))
+    try:
+        with open(PORT_FILE, "w") as f:
+            f.write(str(port))
+    except Exception:
+        pass
+
     print(f"[Status] PiPress Monitor running on http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port)
+
+    # Optional TLS (for internal use / testing):
+    # 1) If MONITOR_SSL=1 and cert/key exist -> enable TLS
+    # 2) Else if cert/key exist -> enable TLS
+    cert_path = os.path.join(BASE_DIR, "cert.pem")
+    key_path = os.path.join(BASE_DIR, "key.pem")
+    ssl_env = os.environ.get("MONITOR_SSL", "").strip() == "1"
+    ssl_context = None
+    if (ssl_env and os.path.exists(cert_path) and os.path.exists(key_path)) or \
+       (os.path.exists(cert_path) and os.path.exists(key_path)):
+        ssl_context = (cert_path, key_path)
+
+    app.run(host="0.0.0.0", port=port, ssl_context=ssl_context)
