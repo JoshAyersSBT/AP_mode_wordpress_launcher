@@ -14,6 +14,8 @@
     .percentage{font-size:6px;text-anchor:middle}
     .label{font-size:4px;text-anchor:middle}
     pre.log-content{max-height:420px;overflow:auto;white-space:pre-wrap}
+    select, input[type="text"]{min-width:16rem}
+    .hint{opacity:.7;font-size:.9em}
   </style>
 </head>
 <body>
@@ -93,50 +95,61 @@
       </div>
     </div>
 
-    <!-- Launcher -->
+    <!-- Launcher (static options) -->
     <div class="tab-content" v-show="tab==='LauncherTab'">
       <form action="/update-settings" method="POST">
         <fieldset>
           <legend>Settings</legend>
 
           <label>
-            <input type="checkbox" name="use_local" v-model="form.USE_LOCAL" {{ 'checked' if USE_LOCAL else '' }}>
+            <input type="checkbox" name="use_local" v-model="form.USE_LOCAL">
             Use Local
           </label><br>
 
           <label>
-            <input type="checkbox" name="fast_launch" v-model="form.FAST_LAUNCH" {{ 'checked' if FAST_LAUNCH else '' }}>
+            <input type="checkbox" name="fast_launch" v-model="form.FAST_LAUNCH">
             Fast Launch
           </label><br>
 
           <label>
-            <input type="checkbox" name="verbose" v-model="form.VERBOSE" {{ 'checked' if VERBOSE else '' }}>
+            <input type="checkbox" name="verbose" v-model="form.VERBOSE">
             Verbose
           </label><br>
 
           <label>
-            <input type="checkbox" name="startup" v-model="form.STARTUP" {{ 'checked' if STARTUP else '' }}>
+            <input type="checkbox" name="startup" v-model="form.STARTUP">
             Launch on Boot
           </label><br>
 
           <label>
-            <input type="checkbox" name="captiveportal" v-model="form.CAPTIVEPORTAL" {{ 'checked' if CAPTIVEPORTAL else '' }}>
+            <input type="checkbox" name="captiveportal" v-model="form.CAPTIVEPORTAL">
             Captive Portal
           </label><br>
 
           <label>
-            <input type="checkbox" name="fti" v-model="form.FTI" {{ 'checked' if FTI else '' }}>
+            <input type="checkbox" name="fti" v-model="form.FTI">
             FTI
           </label><br>
 
+          <!-- SSID (static select with "Custom..." fallback) -->
           <label>
             SSID:
-            <input type="text" name="ssid" v-model="form.SSID" value="{{ SSID }}">
-          </label><br>
+            <select v-model="form.SSID_SELECT">
+              <option v-for="s in STATIC.SSID_OPTIONS" :key="s" :value="s">{{ s }}</option>
+              <option value="__custom__">Custom…</option>
+            </select>
+          </label>
+          <div v-if="form.SSID_SELECT==='__custom__'">
+            <input type="text" v-model="form.SSID" placeholder="Enter custom SSID">
+            <div class="hint">Custom SSID will be saved.</div>
+          </div>
+          <!-- single posted value -->
+          <input type="hidden" name="ssid" :value="effectiveSSID">
+          <br>
 
           <label>
             Passphrase:
-            <input type="text" name="wap_passphrase" v-model="form.WAP_PASSPHRASE" value="{{ WAP_PASSPHRASE }}">
+            <input type="text" name="wap_passphrase" v-model="form.WAP_PASSPHRASE">
           </label><br>
 
           <button type="submit">Save Settings</button>
@@ -144,13 +157,38 @@
       </form>
     </div>
 
-    <!-- LMS -->
+    <!-- LMS (static options) -->
     <div class="tab-content" v-show="tab==='LMSTab'">
       <form action="/update-lms" method="POST">
-        <label>LMS Port: <input type="text" name="lms_port" value="{{ LMS_PORT }}"/></label><br/>
-        <label>LMS Directory: <input type="text" name="lms_dir" value="{{ LMS_DIR }}"/></label><br/>
+        <label>
+          LMS Port:
+          <select v-model="lmsForm.portChoice">
+            <option v-for="p in STATIC.LMS_PORTS" :key="p" :value="String(p)">{{ p }}</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+        </label>
+        <div v-if="lmsForm.portChoice==='__custom__'">
+          <input type="text" v-model="lmsForm.lms_port" placeholder="Enter custom port">
+        </div>
+        <input type="hidden" name="lms_port" :value="effectiveLmsPort">
+        <br/>
+
+        <label>
+          LMS Directory:
+          <select v-model="lmsForm.dirChoice">
+            <option v-for="d in STATIC.LMS_DIRS" :key="d" :value="d">{{ d }}</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+        </label>
+        <div v-if="lmsForm.dirChoice==='__custom__'">
+          <input type="text" v-model="lmsForm.lms_dir" placeholder="Enter custom directory">
+        </div>
+        <input type="hidden" name="lms_dir" :value="effectiveLmsDir">
+        <br/>
+
         <button type="submit">Save LMS Settings</button>
       </form>
+      <p class="hint">Edit the static lists in the script section if you want different preset values.</p>
     </div>
 
     <!-- Captive Portal -->
@@ -196,36 +234,71 @@ const app = Vue.createApp({
       fileList: [],
       previewContent: '',
       selectedFiles: [],
-      // status payload exactly as /status returns it
       status: {
-        cpu_load: 0,
-        ram_usage: 0,
-        temp_c: 0,
-        cpu_percent: 0,
-        ram_percent: 0,
-        temp_percent: 0,
-        cpu_color: '#aaa',
-        ram_color: '#aaa',
-        temp_color: '#aaa',
-        apache_status: '',
-        logs: '' // fallback if /status includes logs
+        cpu_load: 0, ram_usage: 0, temp_c: 0,
+        cpu_percent: 0, ram_percent: 0, temp_percent: 0,
+        cpu_color: '#aaa', ram_color: '#aaa', temp_color: '#aaa',
+        apache_status: '', logs: ''
       },
-      // settings form (seeded from server so it shows immediately)
+
+      // ---- STATIC OPTION LISTS (edit these to your needs) ----
+      STATIC: {
+        SSID_OPTIONS: [
+          'BetaBox1',
+          'BetaBox2',
+          'LearningLab',
+          'ShopBotNet',
+          'HomeAP'
+        ],
+        LMS_PORTS: [80, 8080, 8000, 3000, 35373],
+        LMS_DIRS: [
+          '/var/www/lms',
+          '/var/www/html',
+          '/AP_mode_wordpress_launcher/www/captive-portal',
+          '/AP_mode_wordpress_launcher/www/wordpress'
+        ]
+      },
+
+      // Settings form (seeded from server or sane defaults)
       form: {
-        USE_LOCAL:     {{ 'true' if USE_LOCAL else 'false' }},
-        FAST_LAUNCH:   {{ 'true' if FAST_LAUNCH else 'false' }},
-        VERBOSE:       {{ 'true' if VERBOSE else 'false' }},
-        STARTUP:       {{ 'true' if STARTUP else 'false' }},
-        CAPTIVEPORTAL: {{ 'true' if CAPTIVEPORTAL else 'false' }},
-        FTI:           {{ 'true' if FTI else 'false' }},
-        SSID:          {{ SSID|tojson }},
-        WAP_PASSPHRASE:{{ WAP_PASSPHRASE|tojson }}
+        USE_LOCAL:      {{ 'true' if USE_LOCAL else 'false' }},
+        FAST_LAUNCH:    {{ 'true' if FAST_LAUNCH else 'false' }},
+        VERBOSE:        {{ 'true' if VERBOSE else 'false' }},
+        STARTUP:        {{ 'true' if STARTUP else 'false' }},
+        CAPTIVEPORTAL:  {{ 'true' if CAPTIVEPORTAL else 'false' }},
+        FTI:            {{ 'true' if FTI else 'false' }},
+        SSID:           {{ SSID|tojson }},
+        // selection value; initialized in mounted()
+        SSID_SELECT: ''
+        ,
+        WAP_PASSPHRASE: {{ WAP_PASSPHRASE|tojson }}
       },
-      // dedicated logs model (for /logs endpoint or fallback)
+
+      // LMS form (with "preset or custom" choice)
+      lmsForm: {
+        lms_port: {{ LMS_PORT|tojson }},
+        lms_dir:  {{ LMS_DIR|tojson }},
+        portChoice: '',  // set in mounted()
+        dirChoice:  ''   // set in mounted()
+      },
+
       logs: '',
       followLogs: true
     }
   },
+
+  computed: {
+    effectiveSSID(){
+      return this.form.SSID_SELECT === '__custom__' ? (this.form.SSID || '') : this.form.SSID_SELECT;
+    },
+    effectiveLmsPort(){
+      return this.lmsForm.portChoice === '__custom__' ? (this.lmsForm.lms_port || '') : this.lmsForm.portChoice;
+    },
+    effectiveLmsDir(){
+      return this.lmsForm.dirChoice === '__custom__' ? (this.lmsForm.lms_dir || '') : this.lmsForm.dirChoice;
+    }
+  },
+
   methods: {
     setTab(t) { this.tab = t; },
     handleUpload(e) { this.selectedFiles = Array.from(e.target.files); },
@@ -256,26 +329,59 @@ const app = Vue.createApp({
         const d = await res.json();
         this.status = d;
 
-        // Keep form in sync if backend reports settings in /status
+        // Optionally keep toggles in sync if backend reports them
         if (typeof d.USE_LOCAL      !== 'undefined') this.form.USE_LOCAL      = !!d.USE_LOCAL;
         if (typeof d.FAST_LAUNCH    !== 'undefined') this.form.FAST_LAUNCH    = !!d.FAST_LAUNCH;
         if (typeof d.VERBOSE        !== 'undefined') this.form.VERBOSE        = !!d.VERBOSE;
         if (typeof d.STARTUP        !== 'undefined') this.form.STARTUP        = !!d.STARTUP;
         if (typeof d.CAPTIVEPORTAL  !== 'undefined') this.form.CAPTIVEPORTAL  = !!d.CAPTIVEPORTAL;
         if (typeof d.FTI            !== 'undefined') this.form.FTI            = !!d.FTI;
-        if (typeof d.SSID           !== 'undefined') this.form.SSID           = d.SSID;
+        if (typeof d.SSID           !== 'undefined') {
+          // if backend changed SSID, reflect it in selection/custom
+          this.applySsidDefault(d.SSID);
+        }
         if (typeof d.WAP_PASSPHRASE !== 'undefined') this.form.WAP_PASSPHRASE = d.WAP_PASSPHRASE;
 
-        // Logs fallback if /logs not present
+        if (typeof d.LMS_PORT !== 'undefined') this.applyPortDefault(String(d.LMS_PORT));
+        if (typeof d.LMS_DIR  !== 'undefined') this.applyDirDefault(d.LMS_DIR);
+
+        // logs fallback if /logs not present
         if (!this.logs && d.logs) {
           this.logs = d.logs;
           this.$nextTick(this.autoscroll);
         }
       } catch {}
     },
+    applySsidDefault(cur){
+      if (this.STATIC.SSID_OPTIONS.includes(cur)) {
+        this.form.SSID_SELECT = cur;
+        this.form.SSID = '';
+      } else {
+        this.form.SSID_SELECT = '__custom__';
+        this.form.SSID = cur || '';
+      }
+    },
+    applyPortDefault(cur){
+      if (this.STATIC.LMS_PORTS.map(String).includes(cur)) {
+        this.lmsForm.portChoice = cur;
+        this.lmsForm.lms_port = cur;
+      } else {
+        this.lmsForm.portChoice = '__custom__';
+        this.lmsForm.lms_port = cur || '';
+      }
+    },
+    applyDirDefault(cur){
+      if (this.STATIC.LMS_DIRS.includes(cur)) {
+        this.lmsForm.dirChoice = cur;
+        this.lmsForm.lms_dir = cur;
+      } else {
+        this.lmsForm.dirChoice = '__custom__';
+        this.lmsForm.lms_dir = cur || '';
+      }
+    },
     async refreshLogs() {
       try {
-        const r = await fetch('/logs'); // optional; if not present, /status fallback above is used
+        const r = await fetch('/logs'); // optional; falls back to /status logs if omitted
         if (!r.ok) return;
         const j = await r.json();
         this.logs = j.logs || '';
@@ -288,11 +394,16 @@ const app = Vue.createApp({
       if (box) box.scrollTop = box.scrollHeight;
     }
   },
+
   mounted() {
+    // Seed selects from current Jinja-provided values (static lists only)
+    this.applySsidDefault(this.form.SSID);
+    this.applyPortDefault(String(this.lmsForm.lms_port));
+    this.applyDirDefault(this.lmsForm.lms_dir);
+
     this.loadFiles();
     this.fetchStatus();
     setInterval(this.fetchStatus, 1500);
-    // try to pull logs separately if available
     this.refreshLogs();
     setInterval(() => this.refreshLogs(), 3000);
   }
