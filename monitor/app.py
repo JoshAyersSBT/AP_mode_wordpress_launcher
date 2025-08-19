@@ -316,9 +316,11 @@ def tail_logs():
 
 
 # -------------------- Entry Point --------------------
-
 if __name__ == "__main__":
-    port = find_free_port()
+    # Fixed port (override with env MONITOR_PORT if you want)
+    port = int(os.environ.get("MONITOR_PORT", "35373"))
+
+    # Write the chosen port for other tools
     try:
         with open(PORT_FILE, "w") as f:
             f.write(str(port))
@@ -327,15 +329,12 @@ if __name__ == "__main__":
 
     print(f"[Status] PiPress Monitor running on http://localhost:{port}")
 
-    # Optional TLS (for internal use / testing):
-    # 1) If MONITOR_SSL=1 and cert/key exist -> enable TLS
-    # 2) Else if cert/key exist -> enable TLS
+    # TLS is opt-in via env MONITOR_SSL=1 and only if cert/key exist
     cert_path = os.path.join(BASE_DIR, "cert.pem")
-    key_path = os.path.join(BASE_DIR, "key.pem")
-    ssl_env = os.environ.get("MONITOR_SSL", "").strip() == "1"
-    ssl_context = None
-    if (ssl_env and os.path.exists(cert_path) and os.path.exists(key_path)) or \
-       (os.path.exists(cert_path) and os.path.exists(key_path)):
-        ssl_context = (cert_path, key_path)
+    key_path  = os.path.join(BASE_DIR, "key.pem")
+    ssl_env   = os.environ.get("MONITOR_SSL", "0").strip() == "1"
+    ssl_context = (cert_path, key_path) if (
+        ssl_env and os.path.exists(cert_path) and os.path.exists(key_path)
+    ) else None
 
     app.run(host="0.0.0.0", port=port, ssl_context=ssl_context)

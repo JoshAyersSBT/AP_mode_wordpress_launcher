@@ -100,43 +100,43 @@
           <legend>Settings</legend>
 
           <label>
-            <input type="checkbox" name="use_local" {{ 'checked' if USE_LOCAL else '' }}>
+            <input type="checkbox" name="use_local" v-model="form.USE_LOCAL" {{ 'checked' if USE_LOCAL else '' }}>
             Use Local
           </label><br>
 
           <label>
-            <input type="checkbox" name="fast_launch" {{ 'checked' if FAST_LAUNCH else '' }}>
+            <input type="checkbox" name="fast_launch" v-model="form.FAST_LAUNCH" {{ 'checked' if FAST_LAUNCH else '' }}>
             Fast Launch
           </label><br>
 
           <label>
-            <input type="checkbox" name="verbose" {{ 'checked' if VERBOSE else '' }}>
+            <input type="checkbox" name="verbose" v-model="form.VERBOSE" {{ 'checked' if VERBOSE else '' }}>
             Verbose
           </label><br>
 
           <label>
-            <input type="checkbox" name="startup" {{ 'checked' if STARTUP else '' }}>
+            <input type="checkbox" name="startup" v-model="form.STARTUP" {{ 'checked' if STARTUP else '' }}>
             Launch on Boot
           </label><br>
 
           <label>
-            <input type="checkbox" name="captiveportal" {{ 'checked' if CAPTIVEPORTAL else '' }}>
+            <input type="checkbox" name="captiveportal" v-model="form.CAPTIVEPORTAL" {{ 'checked' if CAPTIVEPORTAL else '' }}>
             Captive Portal
           </label><br>
 
           <label>
-            <input type="checkbox" name="fti" {{ 'checked' if FTI else '' }}>
+            <input type="checkbox" name="fti" v-model="form.FTI" {{ 'checked' if FTI else '' }}>
             FTI
           </label><br>
 
           <label>
             SSID:
-            <input type="text" name="ssid" value="{{ SSID }}">
+            <input type="text" name="ssid" v-model="form.SSID" value="{{ SSID }}">
           </label><br>
 
           <label>
             Passphrase:
-            <input type="text" name="wap_passphrase" value="{{ WAP_PASSPHRASE }}">
+            <input type="text" name="wap_passphrase" v-model="form.WAP_PASSPHRASE" value="{{ WAP_PASSPHRASE }}">
           </label><br>
 
           <button type="submit">Save Settings</button>
@@ -210,6 +210,17 @@ const app = Vue.createApp({
         apache_status: '',
         logs: '' // fallback if /status includes logs
       },
+      // settings form (seeded from server so it shows immediately)
+      form: {
+        USE_LOCAL:     {{ 'true' if USE_LOCAL else 'false' }},
+        FAST_LAUNCH:   {{ 'true' if FAST_LAUNCH else 'false' }},
+        VERBOSE:       {{ 'true' if VERBOSE else 'false' }},
+        STARTUP:       {{ 'true' if STARTUP else 'false' }},
+        CAPTIVEPORTAL: {{ 'true' if CAPTIVEPORTAL else 'false' }},
+        FTI:           {{ 'true' if FTI else 'false' }},
+        SSID:          {{ SSID|tojson }},
+        WAP_PASSPHRASE:{{ WAP_PASSPHRASE|tojson }}
+      },
       // dedicated logs model (for /logs endpoint or fallback)
       logs: '',
       followLogs: true
@@ -242,18 +253,29 @@ const app = Vue.createApp({
       try {
         const res = await fetch("/status");
         if (!res.ok) return;
-        const data = await res.json();
-        this.status = data;
-        // If /status carries logs, show them unless we already have /logs content
-        if (!this.logs && data.logs) {
-          this.logs = data.logs;
+        const d = await res.json();
+        this.status = d;
+
+        // Keep form in sync if backend reports settings in /status
+        if (typeof d.USE_LOCAL      !== 'undefined') this.form.USE_LOCAL      = !!d.USE_LOCAL;
+        if (typeof d.FAST_LAUNCH    !== 'undefined') this.form.FAST_LAUNCH    = !!d.FAST_LAUNCH;
+        if (typeof d.VERBOSE        !== 'undefined') this.form.VERBOSE        = !!d.VERBOSE;
+        if (typeof d.STARTUP        !== 'undefined') this.form.STARTUP        = !!d.STARTUP;
+        if (typeof d.CAPTIVEPORTAL  !== 'undefined') this.form.CAPTIVEPORTAL  = !!d.CAPTIVEPORTAL;
+        if (typeof d.FTI            !== 'undefined') this.form.FTI            = !!d.FTI;
+        if (typeof d.SSID           !== 'undefined') this.form.SSID           = d.SSID;
+        if (typeof d.WAP_PASSPHRASE !== 'undefined') this.form.WAP_PASSPHRASE = d.WAP_PASSPHRASE;
+
+        // Logs fallback if /logs not present
+        if (!this.logs && d.logs) {
+          this.logs = d.logs;
           this.$nextTick(this.autoscroll);
         }
       } catch {}
     },
     async refreshLogs() {
       try {
-        const r = await fetch('/logs');     // will work if you added /logs; otherwise it just no-ops
+        const r = await fetch('/logs'); // optional; if not present, /status fallback above is used
         if (!r.ok) return;
         const j = await r.json();
         this.logs = j.logs || '';
