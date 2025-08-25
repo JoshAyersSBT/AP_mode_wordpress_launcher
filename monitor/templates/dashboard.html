@@ -247,21 +247,21 @@ const app = Vue.createApp({
 
       /* Settings form (seeded from server where available) */
       form: {
-        USE_LOCAL: false,
-        FAST_LAUNCH: false,
-        VERBOSE: false,
-        STARTUP: false,
-        CAPTIVEPORTAL: false,
-        FTI: false,
-        SSID: '',
-        SSID_SELECT: '',
-        WAP_PASSPHRASE: ''
+        USE_LOCAL:      {{ 'true' if USE_LOCAL else 'false' }},
+        FAST_LAUNCH:    {{ 'true' if FAST_LAUNCH else 'false' }},
+        VERBOSE:        {{ 'true' if VERBOSE else 'false' }},
+        STARTUP:        {{ 'true' if STARTUP else 'false' }},
+        CAPTIVEPORTAL:  {{ 'true' if CAPTIVEPORTAL else 'false' }},
+        FTI:            {{ 'true' if FTI else 'false' }},
+        SSID:           {{ SSID|tojson }},
+        SSID_SELECT:    '',
+        WAP_PASSPHRASE: {{ WAP_PASSPHRASE|tojson }}
       },
 
       /* LMS form */
       lmsForm: {
-        lms_port: '',
-        lms_dir: '',
+        lms_port: {{ LMS_PORT|tojson }},
+        lms_dir:  {{ LMS_DIR|tojson }},
         portChoice: '',
         dirChoice: ''
       },
@@ -329,25 +329,31 @@ const app = Vue.createApp({
         const d = await res.json();
         this.status = d;
 
-        if (typeof d.USE_LOCAL !== 'undefined') this.form.USE_LOCAL = !!d.USE_LOCAL;
-        if (typeof d.FAST_LAUNCH !== 'undefined') this.form.FAST_LAUNCH = !!d.FAST_LAUNCH;
-        if (typeof d.VERBOSE !== 'undefined') this.form.VERBOSE = !!d.VERBOSE;
-        if (typeof d.STARTUP !== 'undefined') this.form.STARTUP = !!d.STARTUP;
-        if (typeof d.CAPTIVEPORTAL !== 'undefined') this.form.CAPTIVEPORTAL = !!d.CAPTIVEPORTAL;
-        if (typeof d.FTI !== 'undefined') this.form.FTI = !!d.FTI;
-        if (typeof d.SSID !== 'undefined') this.applySsidDefault(d.SSID);
+        // Sync form fields
+        if (typeof d.USE_LOCAL      !== 'undefined') this.form.USE_LOCAL      = !!d.USE_LOCAL;
+        if (typeof d.FAST_LAUNCH    !== 'undefined') this.form.FAST_LAUNCH    = !!d.FAST_LAUNCH;
+        if (typeof d.VERBOSE        !== 'undefined') this.form.VERBOSE        = !!d.VERBOSE;
+        if (typeof d.STARTUP        !== 'undefined') this.form.STARTUP        = !!d.STARTUP;
+        if (typeof d.CAPTIVEPORTAL  !== 'undefined') this.form.CAPTIVEPORTAL  = !!d.CAPTIVEPORTAL;
+        if (typeof d.FTI            !== 'undefined') this.form.FTI            = !!d.FTI;
+        if (typeof d.SSID           !== 'undefined') this.applySsidDefault(d.SSID);
         if (typeof d.WAP_PASSPHRASE !== 'undefined') this.form.WAP_PASSPHRASE = d.WAP_PASSPHRASE;
+
         if (typeof d.LMS_PORT !== 'undefined') this.applyPortDefault(String(d.LMS_PORT));
-        if (typeof d.LMS_DIR !== 'undefined') this.applyDirDefault(d.LMS_DIR);
+        if (typeof d.LMS_DIR  !== 'undefined') this.applyDirDefault(d.LMS_DIR);
+
         if (!this.logs && d.logs) {
           this.logs = d.logs;
           this.$nextTick(this.autoscroll);
         }
 
+        // Update gauges
         for (const metric of ['cpu', 'ram', 'temp']) {
           const valueEl = document.getElementById(`${metric}-value`);
           const circleEl = document.getElementById(`${metric}-circle`);
-          if (valueEl) valueEl.textContent = metric === 'temp' ? `${d.temp_c}` : `${d[`${metric}_load`]}`;
+          if (valueEl) {
+            valueEl.textContent = metric === 'temp' ? `${d.temp_c}` : `${d[`${metric}_load`]}`;
+          }
           if (circleEl) {
             circleEl.setAttribute("stroke-dasharray", `${d[`${metric}_percent`]}, 100`);
             circleEl.setAttribute("stroke", d[`${metric}_color`]);
@@ -356,6 +362,10 @@ const app = Vue.createApp({
 
         const apacheEl = document.getElementById("apache-status");
         if (apacheEl) apacheEl.textContent = d.apache_status;
+
+        const logEl = document.querySelector(".log-content");
+        if (logEl) logEl.textContent = d.logs;
+
       } catch (err) {
         console.error("Error fetching status:", err);
       }
