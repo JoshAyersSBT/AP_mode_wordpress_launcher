@@ -134,7 +134,7 @@
           <!-- SSID (static select with "Custom..." fallback) -->
           <label>
             SSID:
-            <input type="text" name="wap_passphrase" v-model="form.WAP_PASSPHRASE">
+            <input type="text" name="ssid_custom" v-model="form.SSID">
           </label>
           <div v-if="form.SSID_SELECT==='__custom__'">
             <input type="text" v-model="form.SSID" placeholder="Enter custom SSID" name="ssid_custom">
@@ -223,6 +223,7 @@
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="../static/monitor.js"
 <!--
 <script>
 const app = Vue.createApp({
