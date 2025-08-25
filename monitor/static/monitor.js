@@ -41,6 +41,12 @@ const app = Vue.createApp({
     handleUpload(e) {
       this.selectedFiles = Array.from(e.target.files);
     },
+    async clear() {
+      if (confirm("Are you sure you want to delete all captive portal files?")) {
+        await fetch("/api/captive/clear", { method: "POST" });
+        this.loadFiles();
+      }
+    },
     async upload() {
       const form = new FormData();
       this.selectedFiles.forEach(f => form.append("files", f));

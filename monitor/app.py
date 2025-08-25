@@ -254,6 +254,14 @@ def captive_preview():
         return jsonify({"content": content})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.route("/api/captive/clear", methods=["POST"])
+def captive_clear():
+    try:
+        for f in os.listdir(CAPTIVE_DIR):
+            os.remove(os.path.join(CAPTIVE_DIR, f))
+        return "Cleared"
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/captive/upload", methods=["POST"])
 def captive_upload():
