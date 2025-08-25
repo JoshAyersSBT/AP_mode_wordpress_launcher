@@ -197,7 +197,7 @@
       <input type="file" multiple @change="handleUpload">
       <button type="button" @click="upload">Upload</button>
       <button type="button" @click="restore">Restore Default</button>
-      <button @click="clear">Clear Captive Portal</button>
+      <button @click="clear">Clear Captive Portal</button>cd
       <ul>
         <li v-for="file in fileList" :key="file">
           {{ file }}
@@ -226,6 +226,7 @@
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<!--
 <script>
 const app = Vue.createApp({
   data() {
@@ -375,6 +376,6 @@ const app = Vue.createApp({
 });
 
 app.mount("#monitor-app");
-</script>
+</script>-->
 </body>
 </html>
