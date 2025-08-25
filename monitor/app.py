@@ -242,18 +242,26 @@ def captive_list():
 
 @app.route("/api/captive/preview")
 def captive_preview():
+    from urllib.parse import unquote
+
     filename = request.args.get("file")
     if not filename:
         return jsonify({"error": "Missing filename"}), 400
-    file_path = os.path.join(CAPTIVE_DIR, filename)
-    if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
+
     try:
+        safe_filename = os.path.basename(unquote(filename))
+        file_path = os.path.join(CAPTIVE_DIR, safe_filename)
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"File not found: {safe_filename}"}), 404
+
         with open(file_path, "r", errors="ignore") as f:
             content = f.read()
+
         return jsonify({"content": content})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/captive/clear", methods=["POST"])
 def captive_clear():
     try:

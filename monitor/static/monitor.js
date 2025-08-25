@@ -56,7 +56,7 @@ const app = Vue.createApp({
     async preview(file) {
       const res = await fetch(`/api/captive/preview?file=${encodeURIComponent(file)}`);
       const json = await res.json();
-      this.previewContent = json.content;
+      this.previewContent = json.content || "[Error loading preview]";
     },
     async restore() {
       await fetch("/api/captive/restore", { method: "POST" });
