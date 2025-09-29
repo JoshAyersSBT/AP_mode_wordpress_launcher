@@ -6,24 +6,45 @@ from tkinter import ttk
 from pathlib import Path
 import os
 import sys
+import dbus
 
 SERVICES = ["hostapd", "dnsmasq", "apache2"]
 LMS_CMD = ["/usr/bin/sudo", "/AP_mode_wordpress_launcher/launch.sh"]
 SETUP_AP_SCRIPT = "/AP_mode_wordpress_launcher/setupAP.py"
 INTERFACE = "uap0"
 
-def is_service_active(service_name):
+def is_service_active(service_name: str) -> bool:
     try:
-        result = subprocess.run(["systemctl", "is-active", "--quiet", service_name])
-        return result.returncode == 0
-    except Exception as e:
-        print(f"[ERROR] Failed to check {service_name}: {e}")
+        bus = dbus.SystemBus()
+        systemd = bus.get_object("org.freedesktop.systemd1",
+                                 "/org/freedesktop/systemd1")
+        manager = dbus.Interface(systemd, "org.freedesktop.systemd1.Manager")
+
+        unit_path = manager.GetUnit(service_name)
+        unit = bus.get_object("org.freedesktop.systemd1", unit_path)
+        props = dbus.Interface(unit, "org.freedesktop.DBus.Properties")
+
+        active_state = props.Get("org.freedesktop.systemd1.Unit", "ActiveState")
+        return active_state == "active"
+
+    except dbus.DBusException:
         return False
 
-def ensure_service_started(service_name):
+
+def ensure_service_started(service_name: str) -> bool:
     if not is_service_active(service_name):
         print(f"[BOOT] Starting {service_name}...")
-        subprocess.run(["systemctl", "restart", service_name])
+        try:
+            bus = dbus.SystemBus()
+            systemd = bus.get_object("org.freedesktop.systemd1",
+                                     "/org/freedesktop/systemd1")
+            manager = dbus.Interface(systemd, "org.freedesktop.systemd1.Manager")
+
+            # StartUnit(mode="replace") mimics `systemctl restart`
+            manager.StartUnit(service_name, "replace")
+        except dbus.DBusException as e:
+            print(f"[ERROR] Failed to start {service_name}: {e}")
+            return False
     return is_service_active(service_name)
 
 def create_ap_interface():
