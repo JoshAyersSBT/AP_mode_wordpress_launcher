@@ -479,3 +479,5 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         log_error(f"Unexpected crash: {e}")
+    finally:
+        stop_monitor()  
