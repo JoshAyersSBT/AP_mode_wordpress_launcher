@@ -5,6 +5,7 @@ import os
 import shutil
 import configparser
 from utils.sysinfo import get_status_info
+import threading
 
 # -------------------- Constants & Paths --------------------
 
@@ -324,7 +325,67 @@ def tail_logs():
     except Exception as e:
         return jsonify({"logs": f"[error reading logs: {e}]"}), 200
 
+# -------------------- Programmatic launch helpers --------------------
+def start_monitor_in_thread(host="0.0.0.0", port=None, ssl=False):
+    """
+    Start the Flask app in a background thread (non-blocking).
+    Writes monitor_port.txt (same behavior as __main__).
+    Returns the Thread object.
+    """
+    from pathlib import Path
+    cert_path = os.path.join(BASE_DIR, "cert.pem")
+    key_path  = os.path.join(BASE_DIR, "key.pem")
+    ssl_context = (cert_path, key_path) if (
+        ssl and os.path.exists(cert_path) and os.path.exists(key_path)
+    ) else None
 
+    # Choose port (env overrides; explicit arg wins)
+    if port is None:
+        port = int(os.environ.get("MONITOR_PORT", "35373"))
+
+    # Persist chosen port like the CLI path does
+    try:
+        Path(PORT_FILE).write_text(str(port))
+    except Exception:
+        pass
+
+    def _run():
+        print(f"[Status] PiPress Monitor (thread) on http://{host}:{port}", flush=True)
+        app.run(host=host, port=port, ssl_context=ssl_context, threaded=True)
+
+    t = threading.Thread(target=_run, name="MonitorThread", daemon=True)
+    t.start()
+    return t
+
+
+def start_monitor_in_process(host="0.0.0.0", port=None, ssl=False):
+    """
+    Start the Flask app in a child process (non-blocking, isolated GIL).
+    """
+    from multiprocessing import Process
+    cert_path = os.path.join(BASE_DIR, "cert.pem")
+    key_path  = os.path.join(BASE_DIR, "key.pem")
+    ssl_context = (cert_path, key_path) if (
+        ssl and os.path.exists(cert_path) and os.path.exists(key_path)
+    ) else None
+
+    if port is None:
+        port = int(os.environ.get("MONITOR_PORT", "35373"))
+
+    # Write port file, as above
+    try:
+        with open(PORT_FILE, "w") as f:
+            f.write(str(port))
+    except Exception:
+        pass
+
+    def _child():
+        print(f"[Status] PiPress Monitor (proc) on http://{host}:{port}", flush=True)
+        app.run(host=host, port=port, ssl_context=ssl_context, threaded=True)
+
+    p = Process(target=_child, name="MonitorProcess", daemon=True)
+    p.start()
+    return p
 # -------------------- Entry Point --------------------
 if __name__ == "__main__":
     # Fixed port (override with env MONITOR_PORT if you want)

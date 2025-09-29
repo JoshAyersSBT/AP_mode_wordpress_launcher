@@ -5,14 +5,84 @@ import time
 import os
 import configparser
 from status import log_info, log_success, log_warn, log_error
+import sys
+from multiprocessing import Process
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "launch_settings.conf")
 
+MONITOR_DIR = "/AP_mode_wordpress_launcher/monitor"
+MONITOR_HOST = "0.0.0.0"
+MONITOR_PORT = 35373  # keep what your UI expects (or whatever you write to monitor_port.txt)
+
 # Default values
 SSID = "BetaBox1"
 PASSWORD = "BetaBox1"
+
+
+# setupAP.py (add near the top with the other imports)
+import sys
+from multiprocessing import Process   # >>>
+# >>>
+MONITOR_DIR = "/AP_mode_wordpress_launcher/monitor"
+MONITOR_HOST = "0.0.0.0"
+MONITOR_PORT = 35373  # keep what your UI expects (or whatever you write to monitor_port.txt)
+
+
+# ----- Monitor Helpers ------
+def _run_monitor():  # >>>
+    # Import and run the Flask app in this child process
+    if MONITOR_DIR not in sys.path:
+        sys.path.insert(0, MONITOR_DIR)
+    # app.py must expose `app = Flask(__name__)`
+    from app import app  # noqa: F401
+    # Optional: write the port file if your UI reads it
+    try:
+        with open(os.path.join(MONITOR_DIR, "monitor_port.txt"), "w") as f:
+            f.write(str(MONITOR_PORT))
+    except Exception:
+        pass
+    try:
+        # Prefer waitress if available; otherwise use Flask dev server
+        try:
+            from waitress import serve  # type: ignore
+            print(f"[MONITOR] waitress on {MONITOR_HOST}:{MONITOR_PORT}", flush=True)
+            serve(app, host=MONITOR_HOST, port=MONITOR_PORT)
+        except Exception:
+            print(f"[MONITOR] Flask dev server on {MONITOR_HOST}:{MONITOR_PORT}", flush=True)
+            app.run(host=MONITOR_HOST, port=MONITOR_PORT, threaded=True)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        os._exit(1)
+
+_monitor_proc: Process | None = None  # >>>
+
+def start_monitor():  # >>>
+    global _monitor_proc
+    if _monitor_proc and _monitor_proc.is_alive():
+        return
+    _monitor_proc = Process(target=_run_monitor, name="MonitorProcess", daemon=True)
+    _monitor_proc.start()
+    # Optional: quick readiness wait
+    import socket, time as _t
+    for _ in range(40):  # ~4s
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            if s.connect_ex(("127.0.0.1", MONITOR_PORT)) == 0:
+                print("[MONITOR] ready")
+                return
+        _t.sleep(0.1)
+    print("[MONITOR] failed to bind (continuing)")  # don’t abort AP bring-up
+
+def stop_monitor():  # >>>
+    global _monitor_proc
+    if _monitor_proc and _monitor_proc.is_alive():
+        _monitor_proc.terminate()
+        _monitor_proc.join(timeout=5)
+    _monitor_proc = None
+
 
 # ---------------- CONFIG LOADER ----------------
 def load_config():
@@ -401,6 +471,7 @@ def main():
     start_ap_services()
     #ensure_lighttpd_installed()
     #configure_lighttpd_redirect()
+    start_monitor()
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
