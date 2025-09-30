@@ -16,6 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent
 MONITOR_STATIC = BASE_DIR / "monitor" / "static"
 MONITOR_STATIC.mkdir(parents=True, exist_ok=True)
 
+_MIN_BYTES = 50_000
+
 # Vue target path and mirrors
 VUE_TARGET = MONITOR_STATIC / "vue.global.prod.js"
 VUE_MIRRORS = [
