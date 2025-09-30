@@ -180,6 +180,56 @@ def find_free_port():
         s.bind(('', 0))
         return s.getsockname()[1]
 
+
+def _download(url: str, dest: Path, timeout: int = 20) -> bool:
+    try:
+        logging.info("Downloading %s -> %s", url, dest)
+        req = Request(url, headers={"User-Agent": "PiPress-Monitor/1.0"})
+        with urlopen(req, timeout=timeout) as r:
+            data = r.read()
+        if len(data) < _MIN_BYTES:
+            logging.warning("Downloaded file seems too small (%d bytes).", len(data))
+            return False
+        dest.write_bytes(data)
+        # simple smoke test
+        if b"Vue" not in data:
+            logging.warning("Downloaded file does not look like Vue (string 'Vue' not found).")
+        logging.info("Saved Vue to %s (%d bytes).", dest, len(data))
+        return True
+    except (HTTPError, URLError) as e:
+        logging.error("Failed to download %s (%s)", url, e)
+        return False
+    except Exception as e:
+        logging.exception("Unexpected error downloading %s: %s", url, e)
+        return False
+
+def ensure_vue_asset() -> None:
+    """
+    Ensure /monitor/static/vue.global.prod.js exists and looks sane.
+    Tries mirrors if missing/invalid. Logs result; never raises.
+    """
+    try:
+        if VUE_TARGET.exists() and VUE_TARGET.stat().st_size >= _MIN_BYTES:
+            logging.info("Vue already present at %s (%d bytes).",
+                         VUE_TARGET, VUE_TARGET.stat().st_size)
+            return
+
+        logging.info("Vue not present or too small; attempting download.")
+        for url in VUE_MIRRORS:
+            if _download(url, VUE_TARGET):
+                break
+        else:
+            # Optional: write a tiny stub so the UI shows a helpful message
+            stub = (
+                "/* Vue missing stub */\n"
+                "console.error('[PiPress] Vue could not be fetched at startup.');\n"
+            ).encode("utf-8")
+            VUE_TARGET.write_bytes(stub)
+            logging.error("All Vue mirrors failed. Wrote stub to %s", VUE_TARGET)
+
+    except Exception as e:
+        logging.exception("ensure_vue_asset failed: %s", e)
+
 # -------------------- Routes --------------------
 
 @app.route("/")
@@ -389,6 +439,7 @@ def start_monitor_in_process(host="0.0.0.0", port=None, ssl=False):
 # -------------------- Entry Point --------------------
 if __name__ == "__main__":
     # Fixed port (override with env MONITOR_PORT if you want)
+    ensure_vue_asset()
     port = int(os.environ.get("MONITOR_PORT", "35373"))
 
     # Write the chosen port for other tools
