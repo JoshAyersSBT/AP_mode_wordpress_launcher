@@ -229,23 +229,50 @@
   </div>
 </div>
 
-<!-- 1) Load Vue from a local, offline-safe path; place the file under /static/vendor/ -->
-<script src="/static/vendor/vue.global.prod.js" defer></script>
+<!-- Robust loader: try local Vue paths, then CDN; only load monitor.js after Vue is ready -->
+<script>
+(function(){
+  function addScript(src, onload, onerror){
+    var s=document.createElement('script');
+    s.src=src; s.async=false; // preserve order
+    s.onload=function(){ try{ onload && onload(); }catch(e){ console.error(e);} };
+    s.onerror=function(){ console.error('[Loader] Failed:', src); onerror && onerror(); };
+    document.head.appendChild(s);
+  }
 
-<!-- 2) Guard: show a clear message if Vue failed to load -->
-<script defer>
-  window.addEventListener('DOMContentLoaded', function(){
-    if (!window.Vue) {
-      const el = document.getElementById('monitor-app');
-      if (el) {
-        el.innerHTML = '<div class="status-box" style="border-color:#b00;color:#b00">Vue failed to load. Ensure /static/vendor/vue.global.prod.js is present and permitted by CSP.</div>';
-      }
+  var targets = [
+    '/static/vendor/vue.global.prod.js',          // preferred local vendored path
+    '/static/vue.global.prod.js',                 // alternate local path
+    'https://unpkg.com/vue@3/dist/vue.global.prod.js' // CDN fallback
+  ];
+
+  function tryNext(i){
+    if(i >= targets.length){
+      var el = document.getElementById('monitor-app');
+      if (el) el.innerHTML = '<div class="status-box" style="border-color:#b00;color:#b00">Failed to load Vue from all sources. Check that /static/vendor/vue.global.prod.js exists or allow CDN.</div>';
+      return;
     }
-  });
-</script>
+    addScript(targets[i], function(){
+      if(!window.Vue){ console.warn('[Loader] Vue global not present after', targets[i]); return tryNext(i+1); }
+      // Now load the app code
+      addScript('/static/monitor.js', function(){
+        // monitor.js mounts the app
+        console.log('[Loader] monitor.js loaded');
+      }, function(){
+        var el = document.getElementById('monitor-app');
+        if (el) el.innerHTML = '<div class="status-box" style="border-color:#b00;color:#b00">Failed to load /static/monitor.js</div>';
+      });
+    }, function(){ tryNext(i+1); });
+  }
 
-<!-- 3) Your app logic (externalized). IMPORTANT: remove any duplicate inline Vue app from this file. -->
-<script src="/static/monitor.js" defer></script>
+  // Kick off once DOM is ready to ensure #monitor-app exists
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ tryNext(0); });
+  } else {
+    tryNext(0);
+  }
+})();
+</script>
 
 </body>
 </html>
