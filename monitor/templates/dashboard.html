@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <title>PiPress Monitor</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link href="/static/style.css" rel="stylesheet"/>
+  <link href="/monitor/static/style.css" rel="stylesheet"/>
   <style>
     [v-cloak]{display:none}
     .gauges{display:flex;gap:1rem;flex-wrap:wrap}
@@ -241,9 +241,9 @@
   }
 
   var targets = [
-    '/static/vendor/vue.global.prod.js',          // preferred local vendored path
-    '/static/vue.global.prod.js',                 // alternate local path
-    'https://unpkg.com/vue@3/dist/vue.global.prod.js' // CDN fallback
+    '/monitor/static/vue.global.prod.js',              // preferred local path under monitor static
+    '/monitor/static/vendor/vue.global.prod.js',       // optional vendor subfolder
+    'https://unpkg.com/vue@3/dist/vue.global.prod.js'  // CDN fallback
   ];
 
   function tryNext(i){
@@ -255,7 +255,7 @@
     addScript(targets[i], function(){
       if(!window.Vue){ console.warn('[Loader] Vue global not present after', targets[i]); return tryNext(i+1); }
       // Now load the app code
-      addScript('/static/monitor.js', function(){
+      addScript('/monitor/static/monitor.js', function(){
         // monitor.js mounts the app
         console.log('[Loader] monitor.js loaded');
       }, function(){
