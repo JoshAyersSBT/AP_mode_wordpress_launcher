@@ -6,7 +6,23 @@ import shutil
 import configparser
 from utils.sysinfo import get_status_info
 import threading
+import logging
+from pathlib import Path
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
 
+# Where we want our static files to live (matches your dashboard)
+BASE_DIR = Path(__file__).resolve().parent
+MONITOR_STATIC = BASE_DIR / "monitor" / "static"
+MONITOR_STATIC.mkdir(parents=True, exist_ok=True)
+
+# Vue target path and mirrors
+VUE_TARGET = MONITOR_STATIC / "vue.global.prod.js"
+VUE_MIRRORS = [
+    "https://unpkg.com/vue@3/dist/vue.global.prod.js",
+    # Add more mirrors if you like:
+    "https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js",
+]
 # -------------------- Constants & Paths --------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
