@@ -15,7 +15,7 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
-# paths
+# base paths
 ROOT_DIR = Path(BASE_DIR).parent  # /AP_mode_wordpress_launcher
 SETTINGS_PATH = ROOT_DIR / "launch_settings.conf"
 LMS_SETTINGS_PATH = ROOT_DIR / "lms_settings.conf"
@@ -98,7 +98,6 @@ def load_launch_settings():
             "WAP_PASSPHRASE": cfg.get('NETWORK', 'WAP_PASSPHRASE', fallback=settings["WAP_PASSPHRASE"]),
         })
     else:
-        # legacy flat file
         legacy = _read_legacy_kv_file(SETTINGS_PATH)
         settings.update({
             "USE_LOCAL":     as_bool(legacy.get("USE_LOCAL"), settings["USE_LOCAL"]),
@@ -111,7 +110,6 @@ def load_launch_settings():
             "WAP_PASSPHRASE": legacy.get("WAP_PASSPHRASE", settings["WAP_PASSPHRASE"]),
         })
 
-    # normalize
     for k in ("USE_LOCAL", "FAST_LAUNCH", "STARTUP", "VERBOSE", "CAPTIVEPORTAL", "FTI"):
         settings[k] = as_bool(settings[k], False)
 
@@ -119,7 +117,7 @@ def load_launch_settings():
 
 
 def save_launch_settings(settings_dict):
-    # make sure parent directory exists
+    # ensure directory exists
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     cfg = configparser.ConfigParser()
@@ -133,10 +131,8 @@ def save_launch_settings(settings_dict):
     for key in ['USE_LOCAL', 'FAST_LAUNCH', 'STARTUP', 'VERBOSE', 'CAPTIVEPORTAL', 'FTI']:
         cfg.set('SETTINGS', key, 'true' if as_bool(settings_dict.get(key)) else 'false')
 
-    if 'SSID' in settings_dict:
-        cfg.set('NETWORK', 'SSID', settings_dict.get('SSID', '') or '')
-    if 'WAP_PASSPHRASE' in settings_dict:
-        cfg.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', '') or '')
+    cfg.set('NETWORK', 'SSID', settings_dict.get('SSID', '') or '')
+    cfg.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', '') or '')
 
     with SETTINGS_PATH.open('w') as configfile:
         cfg.write(configfile)
@@ -208,20 +204,17 @@ def status_api():
 
 @app.route('/favicon.ico')
 def favicon():
-    # if you drop a favicon.ico in static/, this will start returning 200
     return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @app.route("/control/<action>")
 def control(action):
-    # on Linux we’ll actually run systemctl
     if platform.system().lower() == "linux" and action in ["start", "stop", "restart"]:
         try:
             subprocess.run(["sudo", "systemctl", action, "apache2"])
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         return redirect(url_for("dashboard"))
-    # on other systems: just report OK
     return jsonify({"status": f"control '{action}' not supported on this OS"}), 200
 
 
@@ -240,10 +233,19 @@ def update_settings():
     }
     try:
         save_launch_settings(settings_dict)
+        return jsonify({
+            "ok": True,
+            "saved": settings_dict,
+            "path": str(SETTINGS_PATH),
+            "cwd": os.getcwd(),
+        }), 200
     except Exception as e:
-        # don't 500 the whole app — just show what failed
-        return jsonify({"error": f"failed to save launch settings: {e}"}), 500
-    return redirect(url_for("dashboard"))
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "path": str(SETTINGS_PATH),
+            "cwd": os.getcwd(),
+        }), 500
 
 
 @app.route("/update-lms", methods=["POST"])
@@ -252,9 +254,19 @@ def update_lms():
     lms_dir = request.form.get("lms_dir", "")
     try:
         save_lms_settings(lms_port, lms_dir)
+        return jsonify({
+            "ok": True,
+            "saved": {"LMS_PORT": lms_port, "LMS_DIR": lms_dir},
+            "path": str(LMS_SETTINGS_PATH),
+            "cwd": os.getcwd(),
+        }), 200
     except Exception as e:
-        return jsonify({"error": f"failed to save lms settings: {e}"}), 500
-    return redirect(url_for("dashboard"))
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "path": str(LMS_SETTINGS_PATH),
+            "cwd": os.getcwd(),
+        }), 500
 
 
 @app.route("/api/captive/list")
@@ -295,7 +307,6 @@ def captive_clear():
             if entry.is_file():
                 entry.unlink()
             else:
-                # leave directories in place
                 pass
         return "Cleared"
     except Exception as e:
@@ -319,11 +330,9 @@ def captive_upload():
 def captive_restore():
     try:
         CAPTIVE_DIR.mkdir(parents=True, exist_ok=True)
-        # clear files only
         for entry in CAPTIVE_DIR.iterdir():
             if entry.is_file():
                 entry.unlink()
-        # copy defaults (files only)
         if DEFAULT_CAPTIVE_DIR.exists():
             for entry in DEFAULT_CAPTIVE_DIR.iterdir():
                 target = CAPTIVE_DIR / entry.name

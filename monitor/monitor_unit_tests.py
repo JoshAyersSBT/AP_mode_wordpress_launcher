@@ -10,9 +10,7 @@ Run your Flask app first, then run this:
 
 import argparse
 import json
-import os
-import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 import requests
 
@@ -24,15 +22,6 @@ GET_ROUTES = [
     "/logs",            # recent logs
     "/api/captive/list",
     "/favicon.ico",
-]
-
-# routes that take simple POST and don't need complex payloads
-POST_ROUTES = [
-    "/api/captive/clear",
-    "/api/captive/restore",
-    # we'll POST to update-settings and update-lms with dummy data
-    "/update-settings",
-    "/update-lms",
 ]
 
 # control routes (start/stop/restart) – may fail on Windows, so we mark them optional
@@ -56,14 +45,12 @@ def try_get(base: str, path: str):
         ct = r.headers.get("Content-Type", "")
         print(f"[GET] {path} -> {r.status_code}")
         if "application/json" in ct:
-            # pretty print json
             try:
                 j = r.json()
                 print(json.dumps(j, indent=2))
             except Exception:
                 print(r.text[:300])
         else:
-            # just show first chunk of HTML/text
             text = r.text.strip()
             if len(text) > 300:
                 text = text[:300] + " ..."
@@ -100,17 +87,21 @@ def main():
 
     base = args.base
 
+    # 1. original GET behavior
     print_header("1. GET routes")
     for path in GET_ROUTES:
         try_get(base, path)
 
+    # 2. original POST behavior (with additions)
     print_header("2. POST routes")
+
     # /api/captive/clear
     try_post(base, "/api/captive/clear")
+
     # /api/captive/restore
     try_post(base, "/api/captive/restore")
 
-    # /update-settings – send dummy settings
+    # /update-settings – send dummy settings (same as before)
     try_post(base, "/update-settings", data={
         "use_local": "on",
         "fast_launch": "on",
@@ -122,14 +113,14 @@ def main():
         "wap_passphrase": "TestPass",
     })
 
-    # /update-lms – send dummy LMS
+    # /update-lms – send dummy LMS (slightly more obviously test-ish)
     try_post(base, "/update-lms", data={
-        "lms_port": "8080",
-        "lms_dir": "/var/www/lms",
+        "lms_port": "9090",
+        "lms_dir": "/srv/test_lms_dir",
     })
 
+    # 3. captive portal preview (preserved)
     print_header("3. Captive portal preview test (if any files exist)")
-    # we need to GET the list and, if there is at least one file, preview it
     try:
         r = requests.get(base.rstrip("/") + "/api/captive/list", timeout=4)
         if r.ok:
@@ -146,6 +137,11 @@ def main():
     except Exception as e:
         print(f"Error checking captive files: {e}")
 
+    # 3b. explicit reset check right after the preview
+    print_header("3b. Captive reset re-check")
+    try_post(base, "/api/captive/restore")
+
+    # 4. control routes (preserved)
     if not args.skip_control:
         print_header("4. Control routes (may fail on non-Linux systems)")
         for path in CONTROL_ROUTES:
