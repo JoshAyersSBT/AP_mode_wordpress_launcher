@@ -16,11 +16,12 @@ app = Flask(
 )
 
 # paths
-SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'launch_settings.conf'))
-LMS_SETTINGS_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'lms_settings.conf'))
-CAPTIVE_DIR = Path(os.path.abspath(os.path.join(BASE_DIR, '..', 'www', 'captive-portal')))
-DEFAULT_CAPTIVE_DIR = Path(os.path.abspath(os.path.join(BASE_DIR, '..', 'www', 'default-captive-portal')))
-PORT_FILE = os.path.join(BASE_DIR, "monitor_port.txt")
+ROOT_DIR = Path(BASE_DIR).parent  # /AP_mode_wordpress_launcher
+SETTINGS_PATH = ROOT_DIR / "launch_settings.conf"
+LMS_SETTINGS_PATH = ROOT_DIR / "lms_settings.conf"
+CAPTIVE_DIR = ROOT_DIR / "www" / "captive-portal"
+DEFAULT_CAPTIVE_DIR = ROOT_DIR / "www" / "default-captive-portal"
+PORT_FILE = Path(BASE_DIR) / "monitor_port.txt"
 
 TRUE_SET = {"1", "true", "yes", "on"}
 FALSE_SET = {"0", "false", "no", "off"}
@@ -46,12 +47,12 @@ def _ensure_ini_sections(cfg: configparser.ConfigParser):
         cfg.add_section('NETWORK')
 
 
-def _read_legacy_kv_file(path):
-    if not os.path.isfile(path):
+def _read_legacy_kv_file(path: Path):
+    if not path.is_file():
         return {}
     out = {}
     try:
-        with open(path, "r", errors="ignore") as f:
+        with path.open("r", errors="ignore") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -118,8 +119,11 @@ def load_launch_settings():
 
 
 def save_launch_settings(settings_dict):
+    # make sure parent directory exists
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     cfg = configparser.ConfigParser()
-    if os.path.isfile(SETTINGS_PATH):
+    if SETTINGS_PATH.is_file():
         try:
             cfg.read(SETTINGS_PATH)
         except configparser.MissingSectionHeaderError:
@@ -134,16 +138,16 @@ def save_launch_settings(settings_dict):
     if 'WAP_PASSPHRASE' in settings_dict:
         cfg.set('NETWORK', 'WAP_PASSPHRASE', settings_dict.get('WAP_PASSPHRASE', '') or '')
 
-    with open(SETTINGS_PATH, 'w') as configfile:
+    with SETTINGS_PATH.open('w') as configfile:
         cfg.write(configfile)
 
 
 def load_lms_settings():
     defaults = {"LMS_PORT": "8080", "LMS_DIR": "/var/www/lms"}
-    if not os.path.isfile(LMS_SETTINGS_PATH):
+    if not LMS_SETTINGS_PATH.is_file():
         return defaults
     settings = {}
-    with open(LMS_SETTINGS_PATH, "r", errors="ignore") as f:
+    with LMS_SETTINGS_PATH.open("r", errors="ignore") as f:
         for line in f:
             if '=' in line:
                 key, value = line.strip().split("=", 1)
@@ -155,7 +159,8 @@ def load_lms_settings():
 
 
 def save_lms_settings(port, directory):
-    with open(LMS_SETTINGS_PATH, "w") as f:
+    LMS_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LMS_SETTINGS_PATH.open("w") as f:
         f.write(f"LMS_PORT={str(port).strip()}\n")
         f.write(f"LMS_DIR={str(directory).strip()}\n")
 
@@ -169,7 +174,6 @@ def dashboard():
     try:
         status = get_status_info()
     except Exception as e:
-        # fallback so the page still renders
         status = {
             "cpu_percent": 0,
             "cpu_color": "#777",
@@ -204,21 +208,21 @@ def status_api():
 
 @app.route('/favicon.ico')
 def favicon():
+    # if you drop a favicon.ico in static/, this will start returning 200
     return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @app.route("/control/<action>")
 def control(action):
-    # only try on Linux; otherwise just say "ok"
+    # on Linux we’ll actually run systemctl
     if platform.system().lower() == "linux" and action in ["start", "stop", "restart"]:
         try:
             subprocess.run(["sudo", "systemctl", action, "apache2"])
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         return redirect(url_for("dashboard"))
-    else:
-        # on Windows / other OS: just pretend success
-        return jsonify({"status": f"control '{action}' not supported on this OS"}), 200
+    # on other systems: just report OK
+    return jsonify({"status": f"control '{action}' not supported on this OS"}), 200
 
 
 @app.route("/update-settings", methods=["POST"])
@@ -234,7 +238,11 @@ def update_settings():
         "SSID": form.get('ssid', ''),
         "WAP_PASSPHRASE": form.get('wap_passphrase', '')
     }
-    save_launch_settings(settings_dict)
+    try:
+        save_launch_settings(settings_dict)
+    except Exception as e:
+        # don't 500 the whole app — just show what failed
+        return jsonify({"error": f"failed to save launch settings: {e}"}), 500
     return redirect(url_for("dashboard"))
 
 
@@ -242,7 +250,10 @@ def update_settings():
 def update_lms():
     lms_port = request.form.get("lms_port", "")
     lms_dir = request.form.get("lms_dir", "")
-    save_lms_settings(lms_port, lms_dir)
+    try:
+        save_lms_settings(lms_port, lms_dir)
+    except Exception as e:
+        return jsonify({"error": f"failed to save lms settings: {e}"}), 500
     return redirect(url_for("dashboard"))
 
 
@@ -284,8 +295,7 @@ def captive_clear():
             if entry.is_file():
                 entry.unlink()
             else:
-                # on Windows, skip directories to avoid Access Denied
-                # if you want to fully clear: shutil.rmtree(entry, ignore_errors=True)
+                # leave directories in place
                 pass
         return "Cleared"
     except Exception as e:
@@ -313,20 +323,12 @@ def captive_restore():
         for entry in CAPTIVE_DIR.iterdir():
             if entry.is_file():
                 entry.unlink()
-            else:
-                # leave dirs
-                pass
-
-        # copy defaults (files)
+        # copy defaults (files only)
         if DEFAULT_CAPTIVE_DIR.exists():
             for entry in DEFAULT_CAPTIVE_DIR.iterdir():
                 target = CAPTIVE_DIR / entry.name
                 if entry.is_file():
                     shutil.copy2(entry, target)
-                # if you want to copy dirs too:
-                # elif entry.is_dir():
-                #     shutil.copytree(entry, target, dirs_exist_ok=True)
-
         return "Restored"
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -335,13 +337,13 @@ def captive_restore():
 @app.route("/logs")
 def tail_logs():
     candidates = [
-        Path(os.path.dirname(os.path.abspath(__file__))) / "monitor.log",
+        Path(BASE_DIR) / "monitor.log",
         Path("/var/log/apache2/error.log"),
         Path("/var/log/apache2/access.log"),
     ]
     path = next((p for p in candidates if p.is_file()), None)
     if not path:
-        return jsonify({"logs": "[no log file found]"}), 200
+        return jsonify({"logs": ""}), 200
 
     try:
         with path.open("rb") as f:
@@ -359,8 +361,7 @@ def tail_logs():
 if __name__ == "__main__":
     port = int(os.environ.get("MONITOR_PORT", "35373"))
     try:
-        with open(PORT_FILE, "w") as f:
-            f.write(str(port))
+        PORT_FILE.write_text(str(port))
     except Exception:
         pass
 
