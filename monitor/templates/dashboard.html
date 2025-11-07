@@ -4,19 +4,15 @@
   <meta charset="utf-8"/>
   <title>PiPress Monitor</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link href="/monitor/static/style.css" rel="stylesheet"/>
+  <!-- use Flask's static dir -->
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet"/>
   <style>
-    [v-cloak]{display:none}
     .gauges{display:flex;gap:1rem;flex-wrap:wrap}
     .gauge{width:160px}
-    .status-box{border:1px solid #ccc;padding:1rem;border-radius:.5rem;margin-bottom:1rem}
-    .controls button{margin-right:.5rem}
-    svg{width:100%;height:auto}
-    .percentage{font-size:6px;text-anchor:middle}
-    .label{font-size:4px;text-anchor:middle}
     pre.log-content{max-height:420px;overflow:auto;white-space:pre-wrap}
-    select, input[type="text"]{min-width:16rem}
-    .hint{opacity:.7;font-size:.9em}
+    .tabs button.active{background:white;border-bottom:2px solid #f4f4f4}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
   </style>
 </head>
 <body>
@@ -26,7 +22,7 @@
   </div>
 </noscript>
 
-<div id="monitor-app" v-cloak>
+<div id="monitor-app">
   <h1>PiPress System Monitor</h1>
 
   <!-- System Status -->
@@ -38,12 +34,13 @@
         <svg viewBox="0 0 36 36">
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-          <path class="circle"
-                :stroke="status.cpu_color"
-                :stroke-dasharray="status.cpu_percent + ', 100'"
+          <path id="cpu-circle"
+                class="circle"
+                stroke="#aaa"
+                stroke-dasharray="0,100"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ status.cpu_load }}</text>
+            <text id="cpu-text" class="percentage" x="18" y="20">0%</text>
             <text class="label" x="18" y="26">CPU</text>
           </g>
         </svg>
@@ -54,12 +51,13 @@
         <svg viewBox="0 0 36 36">
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-          <path class="circle"
-                :stroke="status.ram_color"
-                :stroke-dasharray="status.ram_percent + ', 100'"
+          <path id="ram-circle"
+                class="circle"
+                stroke="#aaa"
+                stroke-dasharray="0,100"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ status.ram_usage }}</text>
+            <text id="ram-text" class="percentage" x="18" y="20">0%</text>
             <text class="label" x="18" y="26">RAM</text>
           </g>
         </svg>
@@ -70,31 +68,32 @@
         <svg viewBox="0 0 36 36">
           <path class="circle-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-          <path class="circle"
-                :stroke="status.temp_color"
-                :stroke-dasharray="status.temp_percent + ', 100'"
+          <path id="temp-circle"
+                class="circle"
+                stroke="#aaa"
+                stroke-dasharray="0,100"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
           <g transform="rotate(90 18 18)">
-            <text class="percentage" x="18" y="20">{{ status.temp_c }}</text>
+            <text id="temp-text" class="percentage" x="18" y="20">0°C</text>
             <text class="label" x="18" y="26">TEMP</text>
           </g>
         </svg>
       </div>
     </div>
-    <p><strong>Apache Status:</strong> {{ status.apache_status }}</p>
+    <p><strong>Apache Status:</strong> <span id="apache-status">{{ status.apache_status }}</span></p>
   </div>
 
   <!-- Tabbed Panel -->
   <div class="status-box tab-container">
     <div class="tabs">
-      <button class="tablink" :class="{active: tab==='ApacheTab'}"  @click="tab='ApacheTab'">Apache Control</button>
-      <button class="tablink" :class="{active: tab==='LauncherTab'}" @click="tab='LauncherTab'">Launcher Settings</button>
-      <button class="tablink" :class="{active: tab==='LMSTab'}"     @click="tab='LMSTab'">LMS Settings</button>
-      <button class="tablink" :class="{active: tab==='CaptiveTab'}" @click="tab='CaptiveTab'">Captive Portal</button>
+      <button class="tablink active" data-tab="ApacheTab">Apache Control</button>
+      <button class="tablink" data-tab="LauncherTab">Launcher Settings</button>
+      <button class="tablink" data-tab="LMSTab">LMS Settings</button>
+      <button class="tablink" data-tab="CaptiveTab">Captive Portal</button>
     </div>
 
     <!-- Apache -->
-    <div class="tab-content" :class="{active: tab==='ApacheTab'}">
+    <div class="tab-content active" id="ApacheTab">
       <div class="controls">
         <a href="/control/start"><button type="button">Start</button></a>
         <a href="/control/stop"><button type="button">Stop</button></a>
@@ -102,58 +101,27 @@
       </div>
     </div>
 
-    <!-- Launcher (static options) -->
-    <div class="tab-content" :class="{active: tab==='LauncherTab'}">
+    <!-- Launcher -->
+    <div class="tab-content" id="LauncherTab">
       <form action="/update-settings" method="POST">
         <fieldset>
           <legend>Settings</legend>
 
-          <label>
-            <input type="checkbox" name="use_local" v-model="form.USE_LOCAL">
-            Use Local
-          </label><br>
+          <label><input type="checkbox" name="use_local" id="use_local"> Use Local</label><br>
+          <label><input type="checkbox" name="fast_launch" id="fast_launch"> Fast Launch</label><br>
+          <label><input type="checkbox" name="verbose" id="verbose"> Verbose</label><br>
+          <label><input type="checkbox" name="startup" id="startup"> Launch on Boot</label><br>
+          <label><input type="checkbox" name="captiveportal" id="captiveportal"> Captive Portal</label><br>
+          <label><input type="checkbox" name="fti" id="fti"> FTI</label><br>
 
-          <label>
-            <input type="checkbox" name="fast_launch" v-model="form.FAST_LAUNCH">
-            Fast Launch
-          </label><br>
-
-          <label>
-            <input type="checkbox" name="verbose" v-model="form.VERBOSE">
-            Verbose
-          </label><br>
-
-          <label>
-            <input type="checkbox" name="startup" v-model="form.STARTUP">
-            Launch on Boot
-          </label><br>
-
-          <label>
-            <input type="checkbox" name="captiveportal" v-model="form.CAPTIVEPORTAL">
-            Captive Portal
-          </label><br>
-
-          <label>
-            <input type="checkbox" name="fti" v-model="form.FTI">
-            FTI
-          </label><br>
-
-          <!-- SSID (static select with "Custom..." fallback) -->
           <label>
             SSID:
-            <input type="text" name="ssid_custom" v-model="form.SSID">
-          </label>
-          <div v-if="form.SSID_SELECT==='__custom__'">
-            <input type="text" v-model="form.SSID" placeholder="Enter custom SSID" name="ssid_custom">
-            <div class="hint">Custom SSID will be saved.</div>
-          </div>
-          <!-- single posted value -->
-          <input type="hidden" name="ssid" :value="effectiveSSID">
-          <br>
+            <input type="text" name="ssid" id="ssid" value="{{ SSID }}">
+          </label><br>
 
           <label>
             Passphrase:
-            <input type="text" name="wap_passphrase" v-model="form.WAP_PASSPHRASE">
+            <input type="text" name="wap_passphrase" id="wap_passphrase" value="{{ WAP_PASSPHRASE }}">
           </label><br>
 
           <button type="submit">Save Settings</button>
@@ -161,118 +129,51 @@
       </form>
     </div>
 
-    <!-- LMS (static options) -->
-    <div class="tab-content" :class="{active: tab==='LMSTab'}">
+    <!-- LMS -->
+    <div class="tab-content" id="LMSTab">
       <form action="/update-lms" method="POST">
         <label>
           LMS Port:
-          <select v-model="lmsForm.portChoice" name="lms_port_select">
-            <option v-for="p in STATIC.LMS_PORTS" :key="p" :value="String(p)">{{ p }}</option>
-            <option value="__custom__">Custom…</option>
-          </select>
-        </label>
-        <div v-if="lmsForm.portChoice==='__custom__'">
-          <input type="text" v-model="lmsForm.lms_port" placeholder="Enter custom port" name="lms_port_custom">
-        </div>
-        <input type="hidden" name="lms_port" :value="effectiveLmsPort">
-        <br/>
-
+          <input type="text" name="lms_port" id="lms_port" value="{{ LMS_PORT }}">
+        </label><br>
         <label>
           LMS Directory:
-          <select v-model="lmsForm.dirChoice" name="lms_dir_select">
-            <option v-for="d in STATIC.LMS_DIRS" :key="d" :value="d">{{ d }}</option>
-            <option value="__custom__">Custom…</option>
-          </select>
-        </label>
-        <div v-if="lmsForm.dirChoice==='__custom__'">
-          <input type="text" v-model="lmsForm.lms_dir" placeholder="Enter custom directory" name="lms_dir_custom">
-        </div>
-        <input type="hidden" name="lms_dir" :value="effectiveLmsDir">
-        <br/>
-
+          <input type="text" name="lms_dir" id="lms_dir" value="{{ LMS_DIR }}">
+        </label><br>
         <button type="submit">Save LMS Settings</button>
       </form>
-      <p class="hint">Edit the static lists in the script section if you want different preset values.</p>
+      <p class="hint">Edit in monitor front-end if you want preset values.</p>
     </div>
 
     <!-- Captive Portal -->
-    <div class="tab-content" :class="{active: tab==='CaptiveTab'}">
+    <div class="tab-content" id="CaptiveTab">
       <h3>Captive Portal Manager</h3>
-      <input type="file" multiple @change="handleUpload">
-      <button type="button" @click="upload">Upload</button>
-      <button type="button" @click="restore">Restore Default</button>
-      <button @click="clear">Clear Captive Portal</button>
-      <ul>
-        <li v-for="file in fileList" :key="file">
-          {{ file }}
-          <button type="button" @click="preview(file)">Preview</button>
-        </li>
-      </ul>
+      <input type="file" multiple id="captive-files">
+      <button type="button" id="captive-upload">Upload</button>
+      <button type="button" id="captive-restore">Restore Default</button>
+      <button type="button" id="captive-clear">Clear Captive Portal</button>
+      <ul id="captive-file-list"></ul>
 
-      <div v-if="previewContent">
+      <div id="captive-preview-box" style="display:none;">
         <h4>Preview:</h4>
-        <pre>{{ previewContent }}</pre>
+        <pre id="captive-preview"></pre>
       </div>
     </div>
   </div>
 
-  <!-- Logs (separate section, not a tab) -->
+  <!-- Logs -->
   <div class="status-box">
     <h2>Recent Logs</h2>
     <div style="margin-bottom:.5rem;">
-      <label><input type="checkbox" v-model="followLogs"> Follow (auto-scroll)</label>
-      <button type="button" @click="refreshLogs" style="margin-left:.5rem;">Refresh</button>
+      <label><input type="checkbox" id="followLogs" checked> Follow (auto-scroll)</label>
+      <button type="button" id="refresh-logs" style="margin-left:.5rem;">Refresh</button>
     </div>
     <div class="log">
-      <pre ref="logbox" class="log-content">{{ logs }}</pre>
+      <pre id="logs-box" class="log-content">{{ status.logs }}</pre>
     </div>
   </div>
 </div>
 
-<!-- Robust loader: try local Vue paths, then CDN; only load monitor.js after Vue is ready -->
-<script>
-(function(){
-  function addScript(src, onload, onerror){
-    var s=document.createElement('script');
-    s.src=src; s.async=false; // preserve order
-    s.onload=function(){ try{ onload && onload(); }catch(e){ console.error(e);} };
-    s.onerror=function(){ console.error('[Loader] Failed:', src); onerror && onerror(); };
-    document.head.appendChild(s);
-  }
-
-  var targets = [
-    '/monitor/static/vue.global.prod.js',              // preferred local path under monitor static
-    '/monitor/static/vendor/vue.global.prod.js',       // optional vendor subfolder
-    'https://unpkg.com/vue@3/dist/vue.global.prod.js'  // CDN fallback
-  ];
-
-  function tryNext(i){
-    if(i >= targets.length){
-      var el = document.getElementById('monitor-app');
-      if (el) el.innerHTML = '<div class="status-box" style="border-color:#b00;color:#b00">Failed to load Vue from all sources. Check that /static/vendor/vue.global.prod.js exists or allow CDN.</div>';
-      return;
-    }
-    addScript(targets[i], function(){
-      if(!window.Vue){ console.warn('[Loader] Vue global not present after', targets[i]); return tryNext(i+1); }
-      // Now load the app code
-      addScript('/monitor/static/monitor.js', function(){
-        // monitor.js mounts the app
-        console.log('[Loader] monitor.js loaded');
-      }, function(){
-        var el = document.getElementById('monitor-app');
-        if (el) el.innerHTML = '<div class="status-box" style="border-color:#b00;color:#b00">Failed to load /static/monitor.js</div>';
-      });
-    }, function(){ tryNext(i+1); });
-  }
-
-  // Kick off once DOM is ready to ensure #monitor-app exists
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function(){ tryNext(0); });
-  } else {
-    tryNext(0);
-  }
-})();
-</script>
-
+<script src="{{ url_for('static', filename='monitor.js') }}"></script>
 </body>
 </html>

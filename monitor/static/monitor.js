@@ -1,236 +1,192 @@
-// Guard: fail gracefully if Vue didn't load
-if (!window.Vue) {
-  console.error("[Monitor] Vue failed to load. Check /static/vendor/vue.global.prod.js and CSP.");
-  const el = document.getElementById("monitor-app");
-  if (el) {
-    el.innerHTML =
-      '<div class="status-box" style="border-color:#b00;color:#b00">Vue failed to load. Ensure /static/vendor/vue.global.prod.js is present and permitted by CSP.</div>';
-  }
-} else {
-  const { createApp } = Vue;
+// static/monitor.js
+document.addEventListener("DOMContentLoaded", () => {
+  const tabs = document.querySelectorAll(".tablink");
+  const tabContents = document.querySelectorAll(".tab-content");
 
-  const app = createApp({
-    data() {
-      return {
-        tab: "ApacheTab",
-        fileList: [],
-        previewContent: "",
-        selectedFiles: [],
-        status: {
-          cpu_load: 0,
-          ram_usage: 0,
-          temp_c: 0,
-          cpu_percent: 0,
-          ram_percent: 0,
-          temp_percent: 0,
-          cpu_color: "#aaa",
-          ram_color: "#aaa",
-          temp_color: "#aaa",
-          apache_status: "",
-          logs: ""
-        },
-
-        /* ---- STATIC OPTION LISTS ---- */
-        STATIC: {
-          SSID_OPTIONS: ["BetaBox1", "BetaBox2", "LearningLab", "HomeAP"],
-          LMS_PORTS: [80, 8080, 8000, 3000, 35373],
-          LMS_DIRS: [
-            "/var/www/lms",
-            "/var/www/html",
-            "/AP_mode_wordpress_launcher/www/captive-portal",
-            "/AP_mode_wordpress_launcher/www/wordpress"
-          ]
-        },
-
-        /* Settings form (seeded later via /status) */
-        form: {
-          USE_LOCAL: false,
-          FAST_LAUNCH: false,
-          VERBOSE: false,
-          STARTUP: false,
-          CAPTIVEPORTAL: false,
-          FTI: false,
-          SSID: "",
-          SSID_SELECT: "",
-          WAP_PASSPHRASE: ""
-        },
-
-        /* LMS form */
-        lmsForm: {
-          lms_port: "",
-          lms_dir: "",
-          portChoice: "",
-          dirChoice: ""
-        },
-
-        logs: "",
-        followLogs: true
-      };
-    },
-
-    computed: {
-      effectiveSSID() {
-        return this.form.SSID_SELECT === "__custom__"
-          ? this.form.SSID || ""
-          : this.form.SSID_SELECT;
-      },
-      effectiveLmsPort() {
-        return this.lmsForm.portChoice === "__custom__"
-          ? this.lmsForm.lms_port || ""
-          : this.lmsForm.portChoice;
-      },
-      effectiveLmsDir() {
-        return this.lmsForm.dirChoice === "__custom__"
-          ? this.lmsForm.lms_dir || ""
-          : this.lmsForm.dirChoice;
-      }
-    },
-
-    methods: {
-      setTab(t) {
-        this.tab = t;
-      },
-      handleUpload(e) {
-        this.selectedFiles = Array.from(e.target.files);
-      },
-
-      async clear() {
-        if (confirm("Are you sure you want to delete all captive portal files?")) {
-          await fetch("/api/captive/clear", { method: "POST" });
-          this.loadFiles();
-        }
-      },
-
-      async upload() {
-        if (!this.selectedFiles.length) return;
-        const form = new FormData();
-        this.selectedFiles.forEach((f) => form.append("files", f));
-        await fetch("/api/captive/upload", { method: "POST", body: form });
-        this.loadFiles();
-      },
-
-      async preview(filename) {
-        try {
-          const res = await fetch(
-            `/api/captive/preview?file=${encodeURIComponent(filename)}`
-          );
-          const json = await res.json();
-          this.previewContent = json.content || "[Error loading preview]";
-        } catch {
-          this.previewContent = "[Preview failed]";
-        }
-      },
-
-      async restore() {
-        await fetch("/api/captive/restore", { method: "POST" });
-        this.loadFiles();
-      },
-
-      async loadFiles() {
-        try {
-          const res = await fetch("/api/captive/list");
-          this.fileList = await res.json();
-        } catch (e) {
-          console.error("[Monitor] loadFiles failed:", e);
-          this.fileList = [];
-        }
-      },
-
-      async fetchStatus() {
-        try {
-          const res = await fetch("/status");
-          if (!res.ok) return;
-          const d = await res.json();
-          this.status = d;
-
-          // Sync form fields
-          if (typeof d.USE_LOCAL !== "undefined")
-            this.form.USE_LOCAL = !!d.USE_LOCAL;
-          if (typeof d.FAST_LAUNCH !== "undefined")
-            this.form.FAST_LAUNCH = !!d.FAST_LAUNCH;
-          if (typeof d.VERBOSE !== "undefined")
-            this.form.VERBOSE = !!d.VERBOSE;
-          if (typeof d.STARTUP !== "undefined")
-            this.form.STARTUP = !!d.STARTUP;
-          if (typeof d.CAPTIVEPORTAL !== "undefined")
-            this.form.CAPTIVEPORTAL = !!d.CAPTIVEPORTAL;
-          if (typeof d.FTI !== "undefined") this.form.FTI = !!d.FTI;
-          if (typeof d.SSID !== "undefined") this.applySsidDefault(d.SSID);
-          if (typeof d.WAP_PASSPHRASE !== "undefined")
-            this.form.WAP_PASSPHRASE = d.WAP_PASSPHRASE;
-
-          if (typeof d.LMS_PORT !== "undefined")
-            this.applyPortDefault(String(d.LMS_PORT));
-          if (typeof d.LMS_DIR !== "undefined") this.applyDirDefault(d.LMS_DIR);
-
-          if (!this.logs && d.logs) {
-            this.logs = d.logs;
-            this.$nextTick(this.autoscroll);
-          }
-        } catch (err) {
-          console.error("[Monitor] Error fetching status:", err);
-        }
-      },
-
-      applySsidDefault(cur) {
-        if (this.STATIC.SSID_OPTIONS.includes(cur)) {
-          this.form.SSID_SELECT = cur;
-          this.form.SSID = "";
-        } else {
-          this.form.SSID_SELECT = "__custom__";
-          this.form.SSID = cur || "";
-        }
-      },
-
-      applyPortDefault(cur) {
-        if (this.STATIC.LMS_PORTS.map(String).includes(cur)) {
-          this.lmsForm.portChoice = cur;
-          this.lmsForm.lms_port = cur;
-        } else {
-          this.lmsForm.portChoice = "__custom__";
-          this.lmsForm.lms_port = cur || "";
-        }
-      },
-
-      applyDirDefault(cur) {
-        if (this.STATIC.LMS_DIRS.includes(cur)) {
-          this.lmsForm.dirChoice = cur;
-          this.lmsForm.lms_dir = cur;
-        } else {
-          this.lmsForm.dirChoice = "__custom__";
-          this.lmsForm.lms_dir = cur || "";
-        }
-      },
-
-      async refreshLogs() {
-        try {
-          const r = await fetch("/logs");
-          if (!r.ok) return;
-          const j = await r.json();
-          this.logs = j.logs || "";
-          this.$nextTick(this.autoscroll);
-        } catch {}
-      },
-
-      autoscroll() {
-        if (!this.followLogs) return;
-        const box = this.$refs.logbox;
-        if (box) box.scrollTop = box.scrollHeight;
-      }
-    },
-
-    mounted() {
-      this.applySsidDefault(this.form.SSID);
-      this.applyPortDefault(String(this.lmsForm.lms_port));
-      this.applyDirDefault(this.lmsForm.lms_dir);
-
-      this.loadFiles();
-      this.fetchStatus();
-      setInterval(this.fetchStatus, 1500);
-      this.refreshLogs();
-      setInterval(() => this.refreshLogs(), 3000);
-    }
+  // --- Tabs ---
+  tabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-tab");
+      tabs.forEach(b => b.classList.remove("active"));
+      tabContents.forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(target).classList.add("active");
+    });
   });
 
-  app.mount("#monitor-app");
-}
+  // DOM refs
+  const cpuCircle = document.getElementById("cpu-circle");
+  const ramCircle = document.getElementById("ram-circle");
+  const tempCircle = document.getElementById("temp-circle");
+  const cpuText = document.getElementById("cpu-text");
+  const ramText = document.getElementById("ram-text");
+  const tempText = document.getElementById("temp-text");
+  const apacheStatus = document.getElementById("apache-status");
+
+  const logsBox = document.getElementById("logs-box");
+  const followLogs = document.getElementById("followLogs");
+  const refreshLogsBtn = document.getElementById("refresh-logs");
+
+  const captiveFileList = document.getElementById("captive-file-list");
+  const captiveFilesInput = document.getElementById("captive-files");
+  const captiveUploadBtn = document.getElementById("captive-upload");
+  const captiveRestoreBtn = document.getElementById("captive-restore");
+  const captiveClearBtn = document.getElementById("captive-clear");
+  const captivePreviewBox = document.getElementById("captive-preview-box");
+  const captivePreview = document.getElementById("captive-preview");
+
+  let selectedFiles = [];
+
+  // --- Status polling ---
+  async function fetchStatus() {
+    try {
+      const r = await fetch("/status");
+      if (!r.ok) return;
+      const d = await r.json();
+
+      // Gauges
+      if (cpuCircle) {
+        cpuCircle.setAttribute("stroke", d.cpu_color || "#aaa");
+        cpuCircle.setAttribute("stroke-dasharray", (d.cpu_percent || 0) + ", 100");
+      }
+      if (cpuText) {
+        cpuText.textContent = d.cpu_load || "0%";
+      }
+
+      if (ramCircle) {
+        ramCircle.setAttribute("stroke", d.ram_color || "#aaa");
+        ramCircle.setAttribute("stroke-dasharray", (d.ram_percent || 0) + ", 100");
+      }
+      if (ramText) {
+        ramText.textContent = d.ram_usage || "0%";
+      }
+
+      if (tempCircle) {
+        tempCircle.setAttribute("stroke", d.temp_color || "#aaa");
+        tempCircle.setAttribute("stroke-dasharray", (d.temp_percent || 0) + ", 100");
+      }
+      if (tempText) {
+        tempText.textContent = d.temp_c || "0°C";
+      }
+
+      if (apacheStatus) {
+        apacheStatus.textContent = d.apache_status || "";
+      }
+
+      // Also use status to tick launcher checkboxes if user didn't load page via POST
+      const useLocal = document.getElementById("use_local");
+      if (useLocal && typeof d.USE_LOCAL !== "undefined") useLocal.checked = !!d.USE_LOCAL;
+      const fastLaunch = document.getElementById("fast_launch");
+      if (fastLaunch && typeof d.FAST_LAUNCH !== "undefined") fastLaunch.checked = !!d.FAST_LAUNCH;
+      const verbose = document.getElementById("verbose");
+      if (verbose && typeof d.VERBOSE !== "undefined") verbose.checked = !!d.VERBOSE;
+      const startup = document.getElementById("startup");
+      if (startup && typeof d.STARTUP !== "undefined") startup.checked = !!d.STARTUP;
+      const captiveportal = document.getElementById("captiveportal");
+      if (captiveportal && typeof d.CAPTIVEPORTAL !== "undefined") captiveportal.checked = !!d.CAPTIVEPORTAL;
+      const fti = document.getElementById("fti");
+      if (fti && typeof d.FTI !== "undefined") fti.checked = !!d.FTI;
+      const ssid = document.getElementById("ssid");
+      if (ssid && typeof d.SSID !== "undefined") ssid.value = d.SSID || "";
+      const wpass = document.getElementById("wap_passphrase");
+      if (wpass && typeof d.WAP_PASSPHRASE !== "undefined") wpass.value = d.WAP_PASSPHRASE || "";
+
+      const lmsPort = document.getElementById("lms_port");
+      if (lmsPort && typeof d.LMS_PORT !== "undefined") lmsPort.value = d.LMS_PORT;
+      const lmsDir = document.getElementById("lms_dir");
+      if (lmsDir && typeof d.LMS_DIR !== "undefined") lmsDir.value = d.LMS_DIR;
+    } catch (e) {
+      console.error("[monitor] status fetch failed", e);
+    }
+  }
+
+  // --- Logs ---
+  async function refreshLogs() {
+    try {
+      const r = await fetch("/logs");
+      if (!r.ok) return;
+      const j = await r.json();
+      logsBox.textContent = j.logs || "";
+      if (followLogs.checked) {
+        logsBox.scrollTop = logsBox.scrollHeight;
+      }
+    } catch (e) {
+      console.error("[monitor] log fetch failed", e);
+    }
+  }
+
+  refreshLogsBtn.addEventListener("click", refreshLogs);
+
+  // --- Captive Portal ---
+  async function loadCaptiveFiles() {
+    try {
+      const r = await fetch("/api/captive/list");
+      const files = await r.json();
+      captiveFileList.innerHTML = "";
+      if (Array.isArray(files)) {
+        files.forEach(fname => {
+          const li = document.createElement("li");
+          li.textContent = fname + " ";
+          const btn = document.createElement("button");
+          btn.textContent = "Preview";
+          btn.addEventListener("click", () => previewCaptive(fname));
+          li.appendChild(btn);
+          captiveFileList.appendChild(li);
+        });
+      }
+    } catch (e) {
+      console.error("[monitor] captive list failed", e);
+    }
+  }
+
+  async function previewCaptive(name) {
+    try {
+      const r = await fetch("/api/captive/preview?file=" + encodeURIComponent(name));
+      const j = await r.json();
+      if (j.content) {
+        captivePreview.textContent = j.content;
+        captivePreviewBox.style.display = "block";
+      } else {
+        captivePreview.textContent = "[Preview failed]";
+        captivePreviewBox.style.display = "block";
+      }
+    } catch (e) {
+      captivePreview.textContent = "[Preview failed]";
+      captivePreviewBox.style.display = "block";
+    }
+  }
+
+  captiveFilesInput.addEventListener("change", (e) => {
+    selectedFiles = Array.from(e.target.files);
+  });
+
+  captiveUploadBtn.addEventListener("click", async () => {
+    if (!selectedFiles.length) return;
+    const form = new FormData();
+    selectedFiles.forEach(f => form.append("files", f));
+    await fetch("/api/captive/upload", { method: "POST", body: form });
+    selectedFiles = [];
+    captiveFilesInput.value = "";
+    loadCaptiveFiles();
+  });
+
+  captiveRestoreBtn.addEventListener("click", async () => {
+    await fetch("/api/captive/restore", { method: "POST" });
+    loadCaptiveFiles();
+  });
+
+  captiveClearBtn.addEventListener("click", async () => {
+    if (!confirm("Clear all captive portal files?")) return;
+    await fetch("/api/captive/clear", { method: "POST" });
+    loadCaptiveFiles();
+  });
+
+  // initial
+  fetchStatus();
+  loadCaptiveFiles();
+  refreshLogs();
+
+  // intervals
+  setInterval(fetchStatus, 1500);
+  setInterval(refreshLogs, 3000);
+});
