@@ -489,15 +489,13 @@ def main():
     
     configure_apache_for_wordpress()
     force_apache_global_defaults()
-
     dns_ok = start_ap_services()
     #ensure_lighttpd_installed()
     #configure_lighttpd_redirect()
-
     start_monitor()
 
     if not dns_ok:
-        log_warn("AP is up but dnsmasq is not running. Captive portal DNS may not function.")
+        log_warn("AP is up but dnsmasq is not running. Captive portal DNS/DHCP may not function.")
         log_warn(f"Users can still access the tool directly at: http://{STATIC_AP_IP}/")
 
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
