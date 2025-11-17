@@ -413,30 +413,44 @@ def start_ap_services():
         time.sleep(0.5)
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
+        # This is still fatal because without uap0 there is no AP at all.
         raise RuntimeError("uap0 interface missing")
 
+    # Make sure any stray hostapd for uap0 is gone
     run("pkill -f 'hostapd.*uap0'", check=False)
+
     log_info("Starting hostapd...")
     run("sudo systemctl unmask hostapd")
     run("sudo systemctl enable hostapd")
     run("sudo systemctl restart hostapd")
 
-    log_info("Starting dnsmasq with retry logic...")
+    # --- dnsmasq is OPTIONAL now ---
+    log_info("Starting dnsmasq (optional; will fail gracefully if port 53 is in use)...")
     dns_unit = "dnsmasq@uap0.service" if os.path.exists("/etc/systemd/system/dnsmasq@.service") else "dnsmasq"
 
     max_retries = 10
+    dns_ok = False
     for attempt in range(1, max_retries + 1):
-        run(f"systemctl restart {dns_unit}")
+        # Do NOT raise if systemctl restart fails; we want to handle it gracefully
+        run(f"systemctl restart {dns_unit}", check=False)
+
         # systemctl is-active --quiet works on both units
         result = subprocess.run(["systemctl", "is-active", "--quiet", dns_unit])
         if result.returncode == 0:
             log_success(f"{dns_unit} is running (attempt {attempt}).")
+            dns_ok = True
             break
+
         log_warn(f"{dns_unit} failed to start (attempt {attempt}/{max_retries}). Retrying...")
         time.sleep(1)
-    else:
-        log_error(f"{dns_unit} failed to start after {max_retries} attempts.")
-        raise RuntimeError("dnsmasq startup failed")
+
+    if not dns_ok:
+        log_warn(f"{dns_unit} failed to start after {max_retries} attempts.")
+        log_warn("dnsmasq is optional for this setup; captive DNS/DHCP may not work.")
+        log_warn(f"Clients may need a manual IP or existing LAN DHCP, and can reach the portal at http://{STATIC_AP_IP}/")
+
+    # Return whether dnsmasq is actually running so callers can decide how loudly to warn
+    return dns_ok
 
 
 # Main
@@ -468,10 +482,17 @@ def main():
     
     configure_apache_for_wordpress()
     force_apache_global_defaults()
-    start_ap_services()
+
+    dns_ok = start_ap_services()
     #ensure_lighttpd_installed()
     #configure_lighttpd_redirect()
+
     start_monitor()
+
+    if not dns_ok:
+        log_warn("AP is up but dnsmasq is not running. Captive portal DNS may not function.")
+        log_warn(f"Users can still access the tool directly at: http://{STATIC_AP_IP}/")
+
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
