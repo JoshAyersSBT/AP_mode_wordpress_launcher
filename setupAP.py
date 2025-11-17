@@ -270,18 +270,55 @@ address=/monitor.betabox/192.168.50.1:
 """)'''
 
 def configure_dnsmasq():
-    log_info("Writing dnsmasq config...")
-    with open(DNSMASQ_CONF, "w") as f:
-        f.write(f"""\
+    """
+    Write the AP-mode dnsmasq configuration.
 
-# AP Mode DNSMasq Configuration
+    Behavior:
+    - If another dnsmasq process is already running, we DO NOT overwrite
+      /etc/dnsmasq.conf. This avoids breaking an existing LAN DNS/DHCP setup.
+    - Otherwise, we write a minimal AP-mode config that:
+        * Binds to the AP interface (INTERFACE, e.g. uap0)
+        * Serves a small DHCP range
+        * Hijacks all DNS to STATIC_AP_IP for captive portal behavior.
+
+    dnsmasq itself is treated as OPTIONAL by start_ap_services(), so even if
+    this config later causes dnsmasq to fail to start, the AP + web tool
+    will still come up and remain reachable via http://STATIC_AP_IP/.
+    """
+    log_info("Configuring dnsmasq for AP mode...")
+
+    # Best-effort check: if a dnsmasq process is already running, don't stomp its config
+    try:
+        result = subprocess.run(
+            ["pgrep", "dnsmasq"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0:
+            log_warn("Detected existing dnsmasq process; skipping AP dnsmasq config "
+                     "to avoid overwriting system-wide settings.")
+            return
+    except Exception as e:
+        log_warn(f"Could not check for existing dnsmasq process: {e}")
+
+    log_info(f"Writing dnsmasq config to {DNSMASQ_CONF}...")
+    config = f"""\
+# AP Mode DNSMasq Configuration (auto-generated)
+
 interface={INTERFACE}
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 
 # Hijack all DNS to local IP for captive portal
-address=/#/192.168.50.1
-""")
+address=/#/{STATIC_AP_IP}
+"""
+
+    with open(DNSMASQ_CONF, "w", newline="\n") as f:
+        f.write(config)
+
+    log_success(f"Updated dnsmasq config at {DNSMASQ_CONF}")
+
+
 def ensure_lighttpd_installed():
     try:
         run("which lighttpd", capture_output=True)
