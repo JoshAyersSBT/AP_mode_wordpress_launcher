@@ -406,6 +406,11 @@ def update_etc_hosts():
 
 
 def start_ap_services():
+    """
+    Bring up hostapd on the AP interface and attempt to start dnsmasq.
+    dnsmasq is treated as OPTIONAL: if it fails (e.g. port 53 already in use),
+    we log warnings but do NOT raise, so the web tool remains reachable by IP.
+    """
     log_info("Ensuring uap0 is available before launching services...")
     for _ in range(10):
         if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
@@ -413,28 +418,30 @@ def start_ap_services():
         time.sleep(0.5)
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
-        # This is still fatal because without uap0 there is no AP at all.
+        # uap0 missing means no AP at all; this is still a hard failure.
         raise RuntimeError("uap0 interface missing")
 
-    # Make sure any stray hostapd for uap0 is gone
+    # Make sure any stray hostapd instance tied to uap0 is stopped first
     run("pkill -f 'hostapd.*uap0'", check=False)
 
     log_info("Starting hostapd...")
-    run("sudo systemctl unmask hostapd")
-    run("sudo systemctl enable hostapd")
-    run("sudo systemctl restart hostapd")
+    # These should not crash the whole script if they fail; restart is the real gate
+    run("sudo systemctl unmask hostapd", check=False)
+    run("sudo systemctl enable hostapd", check=False)
+    # If hostapd fails to start, we still want that to be loud/hard-fail:
+    run("sudo systemctl restart hostapd", check=True)
 
-    # --- dnsmasq is OPTIONAL now ---
+    # --- dnsmasq: optional, fail gracefully ---
     log_info("Starting dnsmasq (optional; will fail gracefully if port 53 is in use)...")
     dns_unit = "dnsmasq@uap0.service" if os.path.exists("/etc/systemd/system/dnsmasq@.service") else "dnsmasq"
 
-    max_retries = 10
+    max_retries = 5
     dns_ok = False
     for attempt in range(1, max_retries + 1):
-        # Do NOT raise if systemctl restart fails; we want to handle it gracefully
+        # Don't let a non-zero exit code abort the script
         run(f"systemctl restart {dns_unit}", check=False)
 
-        # systemctl is-active --quiet works on both units
+        # Check if it actually came up
         result = subprocess.run(["systemctl", "is-active", "--quiet", dns_unit])
         if result.returncode == 0:
             log_success(f"{dns_unit} is running (attempt {attempt}).")
@@ -446,12 +453,12 @@ def start_ap_services():
 
     if not dns_ok:
         log_warn(f"{dns_unit} failed to start after {max_retries} attempts.")
-        log_warn("dnsmasq is optional for this setup; captive DNS/DHCP may not work.")
-        log_warn(f"Clients may need a manual IP or existing LAN DHCP, and can reach the portal at http://{STATIC_AP_IP}/")
+        log_warn("dnsmasq is OPTIONAL for this setup; captive DNS/DHCP may not work.")
+        log_warn(f"Clients may need a manual IP or existing LAN DHCP,")
+        log_warn(f"and can reach the portal directly via: http://{STATIC_AP_IP}/")
 
-    # Return whether dnsmasq is actually running so callers can decide how loudly to warn
+    # Return whether dnsmasq ended up active so callers can decide how loudly to warn
     return dns_ok
-
 
 # Main
 def main():
