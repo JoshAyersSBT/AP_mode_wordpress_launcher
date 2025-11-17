@@ -408,8 +408,11 @@ def update_etc_hosts():
 def start_ap_services():
     """
     Bring up hostapd on the AP interface and attempt to start dnsmasq.
-    dnsmasq is treated as OPTIONAL: if it fails (e.g. port 53 already in use),
-    we log warnings but do NOT raise, so the web tool remains reachable by IP.
+
+    dnsmasq is treated as OPTIONAL:
+    - If it starts, great: captive DNS/DHCP works.
+    - If it fails (port 53 in use, unknown interface, etc.), we log warnings
+      but DO NOT raise, so the web tool remains reachable by IP.
     """
     log_info("Ensuring uap0 is available before launching services...")
     for _ in range(10):
@@ -418,30 +421,30 @@ def start_ap_services():
         time.sleep(0.5)
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
-        # uap0 missing means no AP at all; this is still a hard failure.
+        # uap0 missing really is fatal: no AP at all.
         raise RuntimeError("uap0 interface missing")
 
-    # Make sure any stray hostapd instance tied to uap0 is stopped first
+    # Clean up any stray hostapd instance tied to uap0
     run("pkill -f 'hostapd.*uap0'", check=False)
 
     log_info("Starting hostapd...")
-    # These should not crash the whole script if they fail; restart is the real gate
+    # These are "best effort"; restart is the real gate.
     run("sudo systemctl unmask hostapd", check=False)
     run("sudo systemctl enable hostapd", check=False)
-    # If hostapd fails to start, we still want that to be loud/hard-fail:
+    # If hostapd fails to start, that's a hard failure.
     run("sudo systemctl restart hostapd", check=True)
 
-    # --- dnsmasq: optional, fail gracefully ---
-    log_info("Starting dnsmasq (optional; will fail gracefully if port 53 is in use)...")
+    # ---------- dnsmasq: OPTIONAL ----------
+    log_info("Starting dnsmasq (optional; will fail gracefully if it can’t start)...")
     dns_unit = "dnsmasq@uap0.service" if os.path.exists("/etc/systemd/system/dnsmasq@.service") else "dnsmasq"
 
     max_retries = 5
     dns_ok = False
     for attempt in range(1, max_retries + 1):
-        # Don't let a non-zero exit code abort the script
+        # Do NOT let a non-zero exit abort the script
         run(f"systemctl restart {dns_unit}", check=False)
 
-        # Check if it actually came up
+        # Check if it actually became active
         result = subprocess.run(["systemctl", "is-active", "--quiet", dns_unit])
         if result.returncode == 0:
             log_success(f"{dns_unit} is running (attempt {attempt}).")
@@ -457,7 +460,7 @@ def start_ap_services():
         log_warn(f"Clients may need a manual IP or existing LAN DHCP,")
         log_warn(f"and can reach the portal directly via: http://{STATIC_AP_IP}/")
 
-    # Return whether dnsmasq ended up active so callers can decide how loudly to warn
+    # Caller can use this to decide how loudly to warn.
     return dns_ok
 
 # Main
