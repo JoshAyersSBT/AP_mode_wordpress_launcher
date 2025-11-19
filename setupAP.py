@@ -268,17 +268,40 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 address=/learning.betabox/192.168.50.1
 address=/monitor.betabox/192.168.50.1:
 """)'''
+
 def configure_dnsmasq():
     """
     Write the AP-mode dnsmasq configuration.
 
-    This config:
-      - Binds dnsmasq to the AP interface (INTERFACE, e.g. uap0)
-      - Provides a small DHCP pool on 192.168.50.0/24
-      - Maps local hostnames to STATIC_AP_IP for captive-portal behavior.
-    """
-    log_info("Writing dnsmasq config...")
+    Behavior:
+    - If another dnsmasq process is already running, we DO NOT overwrite
+      /etc/dnsmasq.conf. This avoids breaking an existing LAN DNS/DHCP setup.
+    - Otherwise, we write a minimal AP-mode config that:
+        * Binds to the AP interface (INTERFACE, e.g. uap0)
+        * Serves a small DHCP range
+        * Hijacks all DNS to STATIC_AP_IP for captive portal behavior.
 
+    dnsmasq itself is treated as OPTIONAL by start_ap_services(), so even if
+    this config later causes dnsmasq to fail to start, the AP + web tool
+    will still come up and remain reachable via http://STATIC_AP_IP/.
+    """
+    log_info("Configuring dnsmasq for AP mode...")
+
+    # Best-effort check: if a dnsmasq process is already running, don't stomp its config
+    try:
+        result = subprocess.run(
+            ["pgrep", "dnsmasq"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0:
+            log_warn("Detected existing dnsmasq process; skipping AP dnsmasq config "
+                     "to avoid overwriting system-wide settings.")
+            return
+    except Exception as e:
+        log_warn(f"Could not check for existing dnsmasq process: {e}")
+
+    log_info(f"Writing dnsmasq config to {DNSMASQ_CONF}...")
     config = f"""\
 # AP Mode DNSMasq Configuration (auto-generated)
 
@@ -286,15 +309,15 @@ interface={INTERFACE}
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 
-# Static hostnames for local domains
-address=/learning.betabox/{STATIC_AP_IP}
-address=/monitor.betabox/{STATIC_AP_IP}
+# Hijack all DNS to local IP for captive portal
+address=/#/{STATIC_AP_IP}
 """
 
     with open(DNSMASQ_CONF, "w", newline="\n") as f:
         f.write(config)
 
-    log_success(f"Wrote dnsmasq config to {DNSMASQ_CONF}")
+    log_success(f"Updated dnsmasq config at {DNSMASQ_CONF}")
+
 
 def ensure_lighttpd_installed():
     try:
@@ -420,6 +443,14 @@ def update_etc_hosts():
 
 
 def start_ap_services():
+    """
+    Bring up hostapd on the AP interface and attempt to start dnsmasq.
+
+    dnsmasq is treated as OPTIONAL:
+    - If it starts, great: captive DNS/DHCP works.
+    - If it fails (port 53 in use, unknown interface, etc.), we log warnings
+      but DO NOT raise, so the web tool remains reachable by IP.
+    """
     log_info("Ensuring uap0 is available before launching services...")
     for _ in range(10):
         if os.system(f"ip link show {INTERFACE} > /dev/null 2>&1") == 0:
@@ -427,31 +458,47 @@ def start_ap_services():
         time.sleep(0.5)
     else:
         log_error("uap0 not found. Aborting hostapd and DNS startup.")
+        # uap0 missing really is fatal: no AP at all.
         raise RuntimeError("uap0 interface missing")
 
+    # Clean up any stray hostapd instance tied to uap0
     run("pkill -f 'hostapd.*uap0'", check=False)
-    log_info("Starting hostapd...")
-    run("sudo systemctl unmask hostapd")
-    run("sudo systemctl enable hostapd")
-    run("sudo systemctl restart hostapd")
 
-    log_info("Starting dnsmasq with retry logic...")
+    log_info("Starting hostapd...")
+    # These are "best effort"; restart is the real gate.
+    run("sudo systemctl unmask hostapd", check=False)
+    run("sudo systemctl enable hostapd", check=False)
+    # If hostapd fails to start, that's a hard failure.
+    run("sudo systemctl restart hostapd", check=True)
+
+    # ---------- dnsmasq: OPTIONAL ----------
+    log_info("Starting dnsmasq (optional; will fail gracefully if it can’t start)...")
     dns_unit = "dnsmasq@uap0.service" if os.path.exists("/etc/systemd/system/dnsmasq@.service") else "dnsmasq"
 
-    max_retries = 10
+    max_retries = 5
+    dns_ok = False
     for attempt in range(1, max_retries + 1):
-        run(f"systemctl restart {dns_unit}")
-        # systemctl is-active --quiet works on both units
+        # Do NOT let a non-zero exit abort the script
+        run(f"systemctl restart {dns_unit}", check=False)
+
+        # Check if it actually became active
         result = subprocess.run(["systemctl", "is-active", "--quiet", dns_unit])
         if result.returncode == 0:
             log_success(f"{dns_unit} is running (attempt {attempt}).")
+            dns_ok = True
             break
+
         log_warn(f"{dns_unit} failed to start (attempt {attempt}/{max_retries}). Retrying...")
         time.sleep(1)
-    else:
-        log_error(f"{dns_unit} failed to start after {max_retries} attempts.")
-        raise RuntimeError("dnsmasq startup failed")
 
+    if not dns_ok:
+        log_warn(f"{dns_unit} failed to start after {max_retries} attempts.")
+        log_warn("dnsmasq is OPTIONAL for this setup; captive DNS/DHCP may not work.")
+        log_warn(f"Clients may need a manual IP or existing LAN DHCP,")
+        log_warn(f"and can reach the portal directly via: http://{STATIC_AP_IP}/")
+
+    # Caller can use this to decide how loudly to warn.
+    return dns_ok
 
 # Main
 def main():
@@ -482,10 +529,15 @@ def main():
     
     configure_apache_for_wordpress()
     force_apache_global_defaults()
-    start_ap_services()
+    dns_ok = start_ap_services()
     #ensure_lighttpd_installed()
     #configure_lighttpd_redirect()
     start_monitor()
+
+    if not dns_ok:
+        log_warn("AP is up but dnsmasq is not running. Captive portal DNS/DHCP may not function.")
+        log_warn(f"Users can still access the tool directly at: http://{STATIC_AP_IP}/")
+
     log_success(f"AP '{SSID}' is up on {INTERFACE} ({STATIC_AP_IP})")
 
 if __name__ == "__main__":
