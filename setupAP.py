@@ -268,20 +268,34 @@ dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 address=/learning.betabox/192.168.50.1
 address=/monitor.betabox/192.168.50.1:
 """)'''
-
 def configure_dnsmasq():
-    log_info("Writing dnsmasq config...")
-    with open(DNSMASQ_CONF, "w") as f:
-        f.write(f"""\
+    """
+    Write the AP-mode dnsmasq configuration.
 
-# AP Mode DNSMasq Configuration
+    This config:
+      - Binds dnsmasq to the AP interface (INTERFACE, e.g. uap0)
+      - Provides a small DHCP pool on 192.168.50.0/24
+      - Maps local hostnames to STATIC_AP_IP for captive-portal behavior.
+    """
+    log_info("Writing dnsmasq config...")
+
+    config = f"""\
+# AP Mode DNSMasq Configuration (auto-generated)
+
 interface={INTERFACE}
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.100,255.255.255.0,24h
 
-# Hijack all DNS to local IP for captive portal
-address=/#/192.168.50.1
-""")
+# Static hostnames for local domains
+address=/learning.betabox/{STATIC_AP_IP}
+address=/monitor.betabox/{STATIC_AP_IP}
+"""
+
+    with open(DNSMASQ_CONF, "w", newline="\n") as f:
+        f.write(config)
+
+    log_success(f"Wrote dnsmasq config to {DNSMASQ_CONF}")
+
 def ensure_lighttpd_installed():
     try:
         run("which lighttpd", capture_output=True)
