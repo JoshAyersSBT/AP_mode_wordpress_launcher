@@ -411,19 +411,33 @@ else
 fi
 
 print_progress "Detecting IP address"
+
 if [ "$USE_LOCAL" = true ]; then
+    # Local mode: just use whatever the system's primary IP is
     AP_IP=$(hostname -I | awk '{print $1}')
 else
-    if [ "$UAP0_OK" = true ]; then
-        AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || true)
+    # AP mode: try to read IP from uap0 *if it exists right now*
+    if [ "$UAP0_OK" = true ] && ip link show uap0 >/dev/null 2>&1; then
+        AP_IP=$(ip -4 addr show uap0 2>/dev/null \
+            | awk '/inet / {print $2}' \
+            | cut -d/ -f1 \
+            | head -n1)
     fi
 fi
 
+# Fallbacks if AP_IP is still empty
 if [ -z "$AP_IP" ]; then
-    echo -e "${RED}[ERROR]${NC} Failed to detect IP address (AP_IP is empty)."
-    tput cnorm
-    exit 1
+    if [ "$USE_LOCAL" = false ]; then
+        # We *expect* uap0 to be 192.168.50.1 in AP mode; use that as a safe default
+        echo -e "${YELLOW}[WARN]${NC} Could not read IP from uap0; assuming 192.168.50.1."
+        AP_IP="192.168.50.1"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Could not detect IP automatically; using hostname -I or 127.0.0.1."
+        AP_IP=$(hostname -I | awk '{print $1}')
+        [ -z "$AP_IP" ] && AP_IP="127.0.0.1"
+    fi
 fi
+
 
 # Ensure hostapd and dnsmasq are actually running
 dns_unit="dnsmasq"
