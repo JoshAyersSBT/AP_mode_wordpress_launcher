@@ -116,6 +116,7 @@ show_status() {
     apache_status=$(systemctl is-active apache2 || echo "inactive")
     hostapd_status=$(systemctl is-active hostapd || echo "inactive")
     dnsmasq_status=$(systemctl is-active dnsmasq || echo "inactive")
+    dnsmasq_uap0_status=$(systemctl is-active dnsmasq@uap0 || echo "inactive")
 
     monitor_pid=$(pgrep -f "python3.*app.py" || true)
     monitor_port=$(ss -tuln | grep ":5000 " || true)
@@ -135,7 +136,8 @@ show_status() {
     STATUS_TEXT="Launch Script PID: ${launch_pid:-Not Running}\n"
     STATUS_TEXT+="Apache2: $apache_status\n"
     STATUS_TEXT+="hostapd: $hostapd_status\n"
-    STATUS_TEXT+="dnsmasq: $dnsmasq_status\n"
+    STATUS_TEXT+="dnsmasq (global): $dnsmasq_status\n"
+    STATUS_TEXT+="dnsmasq@uap0: $dnsmasq_uap0_status\n"
     STATUS_TEXT+="System Monitor: $monitor_status\n"
 
     whiptail --title "PiPress Status Report" --msgbox "$STATUS_TEXT" 20 70
@@ -217,6 +219,51 @@ start_monitor_with_retries() {
     done
 
     echo -e "${RED}[ERROR]${NC} Monitor failed to start after $MAX_SERVICE_RETRIES attempts. See $LOG_FILE for details."
+    return 1
+}
+
+# Ensure uap0 interface exists (and try to create it from wlan0 if missing)
+ensure_uap0_interface() {
+    print_progress "Ensuring uap0 network interface exists"
+    local attempt
+    local created=false
+
+    for attempt in $(seq 1 15); do
+        if ip link show uap0 > /dev/null 2>&1; then
+            echo -e "\n${GREEN}[OK]${NC} uap0 interface is present."
+            # Try to bring it up (ignore failures)
+            set +e
+            sudo ip link set uap0 up >/dev/null 2>&1
+            set -e
+            return 0
+        fi
+
+        # Try to create it from wlan0 if possible
+        if ip link show wlan0 > /dev/null 2>&1; then
+            echo -e "\n${YELLOW}[WARN]${NC} uap0 missing; attempting to create from wlan0 (attempt $attempt)..."
+            set +e
+            sudo iw dev wlan0 interface add uap0 type __ap >/dev/null 2>&1
+            local rc=$?
+            set -e
+
+            if [ $rc -eq 0 ]; then
+                created=true
+                # Give kernel a moment to register the interface
+                sleep 2
+                continue
+            fi
+        fi
+
+        sleep 1
+    done
+
+    if ip link show uap0 > /dev/null 2>&1; then
+        echo -e "\n${GREEN}[OK]${NC} uap0 appeared after retries."
+        return 0
+    fi
+
+    echo -e "\n${RED}[ERROR]${NC} uap0 interface not present after multiple attempts."
+    echo -e "${YELLOW}[WARN]${NC} dnsmasq@uap0.service will not be started. Check your AP setup (setupAP.py, hostapd config, and wlan0)."
     return 1
 }
 
@@ -350,23 +397,30 @@ EOF
     esac
 done
 
-print_progress "Waiting for uap0 interface to come online"
-for i in {1..5}; do
-    if ip link show uap0 > /dev/null 2>&1; then
-        break
+# NEW: robust uap0 handling instead of a blind 5-second wait
+UAP0_OK=false
+if [ "$USE_LOCAL" = false ]; then
+    if ensure_uap0_interface; then
+        UAP0_OK=true
+    else
+        UAP0_OK=false
     fi
-    sleep 1
-done
+else
+    # In local mode, uap0 may not be needed; don't treat as fatal
+    UAP0_OK=false
+fi
 
 print_progress "Detecting IP address"
 if [ "$USE_LOCAL" = true ]; then
     AP_IP=$(hostname -I | awk '{print $1}')
 else
-    AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    if [ "$UAP0_OK" = true ]; then
+        AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || true)
+    fi
 fi
 
 if [ -z "$AP_IP" ]; then
-    echo -e "${RED}[ERROR]${NC} Failed to detect IP address."
+    echo -e "${RED}[ERROR]${NC} Failed to detect IP address (AP_IP is empty)."
     tput cnorm
     exit 1
 fi
@@ -378,7 +432,18 @@ if [ -f "/etc/systemd/system/dnsmasq@.service" ]; then
 fi
 
 ensure_service "hostapd" "hostapd (Wi-Fi AP)"
-ensure_service "$dns_unit" "dnsmasq DNS/DHCP ($dns_unit)"
+
+if [ "$dns_unit" = "dnsmasq@uap0.service" ]; then
+    if [ "$UAP0_OK" = true ]; then
+        ensure_service "$dns_unit" "dnsmasq DNS/DHCP ($dns_unit)"
+    else
+        echo -e "${RED}[ERROR]${NC} Skipping start of dnsmasq@uap0.service because uap0 does not exist."
+        echo -e "${YELLOW}[HINT]${NC} Check why uap0 is missing (hostapd config, iw/driver support) and rerun launch.sh."
+    fi
+else
+    # Fallback: global dnsmasq unit
+    ensure_service "$dns_unit" "dnsmasq DNS/DHCP ($dns_unit)"
+fi
 
 print_progress "Enabling Apache server"
 maybe_run sudo systemctl enable apache2
