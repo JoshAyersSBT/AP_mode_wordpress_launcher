@@ -2,7 +2,6 @@
 
 # PiPress Launch Script with AP-STA Mode Support + Configurable Settings
 
-
 source "$(dirname "$0")/launch_Utilities.sh"
 source "$(dirname "$0")/Full_Tool_Install_utilities.sh"
 
@@ -42,8 +41,6 @@ for file in "${NEEDED_FILES[@]}"; do
     fi
 done
 
-
-
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 MONITOR_DIR="$BASE_DIR/monitor"
 CONFIG_FILE="$BASE_DIR/launch_settings.conf"
@@ -60,6 +57,10 @@ GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[1;34m'
 NC='\033[0m'  # No Color
+
+# Service retry settings
+MAX_SERVICE_RETRIES=3
+SERVICE_RETRY_DELAY=3
 
 # Load settings if config file exists
 current_section=""
@@ -81,14 +82,16 @@ while IFS='=' read -r key val; do
     esac
 done < "$CONFIG_FILE"
 
-
-TOTAL_STEPS=8
+TOTAL_STEPS=10
 CURRENT_STEP=0
 
 print_progress() {
     local message="$1"
     CURRENT_STEP=$((CURRENT_STEP + 1))
     local percent=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+    if [ $percent -gt 100 ]; then
+        percent=100
+    fi
     local bar_len=$((percent / 10))
     local bar=$(printf '%0.s#' $(seq 1 $bar_len))
     local spaces=$(printf '%0.s-' $(seq 1 $((10 - bar_len))))
@@ -97,6 +100,7 @@ print_progress() {
     sleep 0.5
 }
 
+# Run a command, optionally quiet, but DO NOT swallow failures here.
 maybe_run() {
     if [ "$VERBOSE" = true ]; then
         "$@"
@@ -137,8 +141,86 @@ show_status() {
     whiptail --title "PiPress Status Report" --msgbox "$STATUS_TEXT" 20 70
 }
 
-DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
+# Ensure a systemd service is active, with retries and error printing
+ensure_service() {
+    local svc="$1"
+    local friendly="${2:-$svc}"
+    local attempt rc
 
+    for attempt in $(seq 1 "$MAX_SERVICE_RETRIES"); do
+        print_progress "Starting $friendly (attempt $attempt/$MAX_SERVICE_RETRIES)"
+
+        # Don't let set -e kill the script on restart failure
+        set +e
+        sudo systemctl restart "$svc"
+        rc=$?
+        set -e
+
+        sleep "$SERVICE_RETRY_DELAY"
+
+        if systemctl is-active --quiet "$svc"; then
+            echo -e "\n${GREEN}[OK]${NC} $friendly is active."
+            return 0
+        else
+            echo -e "\n${YELLOW}[WARN]${NC} $friendly failed to start (attempt $attempt)."
+            echo -e "${YELLOW}[WARN]${NC} systemctl status for $svc:"
+            # Always show status output, even in non-verbose mode
+            sudo systemctl status "$svc" --no-pager | head -n 25 || true
+        fi
+    done
+
+    echo -e "${RED}[ERROR]${NC} $friendly failed to start after $MAX_SERVICE_RETRIES attempts."
+    return 1
+}
+
+# Start the Flask monitor with retries; print log errors if it fails
+start_monitor_with_retries() {
+    local attempt mpid waited
+    MONITOR_PORT=""
+
+    cd "$MONITOR_DIR"
+    rm -f "$LOG_FILE" "$PORT_FILE"
+
+    for attempt in $(seq 1 "$MAX_SERVICE_RETRIES"); do
+        print_progress "Launching monitor server (attempt $attempt/$MAX_SERVICE_RETRIES)"
+
+        set +e
+        nohup python3 app.py >> "$LOG_FILE" 2>&1 &
+        mpid=$!
+        set -e
+
+        waited=0
+        MONITOR_PORT=""
+
+        # Wait for monitor_port.txt to appear
+        while [ $waited -lt 10 ]; do
+            if [ -f "$PORT_FILE" ]; then
+                MONITOR_PORT=$(cat "$PORT_FILE")
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+
+        if [ -n "$MONITOR_PORT" ]; then
+            echo -e "\n${GREEN}[OK]${NC} Monitor running on port $MONITOR_PORT (PID $mpid)."
+            return 0
+        else
+            echo -e "\n${YELLOW}[WARN]${NC} Monitor did not report a port on attempt $attempt."
+            echo -e "${YELLOW}[WARN]${NC} Last log lines from $LOG_FILE:"
+            tail -n 20 "$LOG_FILE" 2>/dev/null || echo "  (no logs yet)"
+
+            set +e
+            kill "$mpid" 2>/dev/null
+            set -e
+        fi
+    done
+
+    echo -e "${RED}[ERROR]${NC} Monitor failed to start after $MAX_SERVICE_RETRIES attempts. See $LOG_FILE for details."
+    return 1
+}
+
+DEPENDENCIES=(apache2 php libapache2-mod-php php-mysql mariadb-server hostapd dnsmasq iptables iw curl wget dnsutils net-tools python3 python3-flask python3-psutil)
 
 check_and_install() {
     local pkg="$1"
@@ -283,32 +365,28 @@ else
     AP_IP=$(ip -4 addr show uap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 fi
 
-
 if [ -z "$AP_IP" ]; then
     echo -e "${RED}[ERROR]${NC} Failed to detect IP address."
+    tput cnorm
     exit 1
 fi
 
-print_progress "Restarting Apache server"
-maybe_run sudo systemctl restart apache2
+# Ensure hostapd and dnsmasq are actually running
+dns_unit="dnsmasq"
+if [ -f "/etc/systemd/system/dnsmasq@.service" ]; then
+    dns_unit="dnsmasq@uap0.service"
+fi
+
+ensure_service "hostapd" "hostapd (Wi-Fi AP)"
+ensure_service "$dns_unit" "dnsmasq DNS/DHCP ($dns_unit)"
+
+print_progress "Enabling Apache server"
 maybe_run sudo systemctl enable apache2
 
-print_progress "Preparing Flask monitor"
-cd "$MONITOR_DIR"
-rm -f "$LOG_FILE" "$PORT_FILE"
+ensure_service "apache2" "Apache web server"
 
-print_progress "Launching monitor server"
-maybe_run nohup python3 app.py >> "$LOG_FILE" 2>&1 &
-
-print_progress "Waiting for monitor port"
-MONITOR_PORT=""
-for i in {1..10}; do
-    if [ -f "$PORT_FILE" ]; then
-        MONITOR_PORT=$(cat "$PORT_FILE")
-        break
-    fi
-    sleep 1
-done
+print_progress "Starting Flask monitor"
+start_monitor_with_retries
 
 print_progress "Finalizing setup"
 tput cnorm
@@ -322,7 +400,7 @@ echo ""
 echo -e "${GREEN}[SUCCESS]${NC} PiPress setup complete."
 echo "=============================="
 echo "- Web Portal:  http://learning.betabox (http://$AP_IP)"
-echo "- Monitor UI:  http://moitor.betabox (http://$AP_IP:$MONITOR_PORT)"
+echo "- Monitor UI:  http://monitor.betabox (http://$AP_IP:$MONITOR_PORT)"
 echo "- Logs:        $LOG_FILE"
 echo "=============================="
 
