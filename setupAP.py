@@ -355,21 +355,38 @@ def configure_apache_for_wordpress():
     log_info("Configuring Apache for captive portal content...")
 
     site_conf = f"""\
-<VirtualHost *:80>
-    ServerName learning.betabox
-    ServerAlias learning.betabox
-    DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
+        <VirtualHost *:80>
+            ServerName learning.betabox
+            # Catch *any* host and treat it as the captive portal
+            ServerAlias learning.betabox
+            ServerAlias *
 
-    <Directory /AP_mode_wordpress_launcher/www/captive-portal>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
+            DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
 
-    ErrorLog /var/log/apache2/learning_error.log
-    CustomLog /var/log/apache2/learning_access.log combined
-</VirtualHost>
-"""
+            # Global rewrite rules for captive portal behavior
+            RewriteEngine On
+            # 1) Do NOT redirect if user is already on the portal host…
+            RewriteCond %{HTTP_HOST} !^learning\.betabox$ [NC]
+            # 2) …or if they’re targeting the monitor hostname…
+            RewriteCond %{HTTP_HOST} !^monitor\.betabox$ [NC]
+            # 3) …or if they’re using a raw IPv4 address (e.g. 192.168.50.1)
+            RewriteCond %{HTTP_HOST} !^[0-9.]+$ [NC]
+            # For anything else, force them into the captive portal.
+            RewriteRule ^/(.*)$ http://learning.betabox/ [R=302,L]
+
+            <Directory /AP_mode_wordpress_launcher/www/captive-portal>
+                Options Indexes FollowSymLinks
+                AllowOverride All
+                Require all granted
+                RewriteEngine On
+            </Directory>
+
+            ErrorLog /var/log/apache2/learning_error.log
+            CustomLog /var/log/apache2/learning_access.log combined
+        </VirtualHost>
+
+            """
+
     apache_site_path = "/etc/apache2/sites-available/pipress.conf"
     os.makedirs("/AP_mode_wordpress_launcher/www/captive-portal/", exist_ok=True)
 

@@ -58,6 +58,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[1;34m'
 NC='\033[0m'  # No Color
 
+# --- Jupyter configuration ---
+JUPYTER_VENV="/opt/pipress/jupyter_venv"
+JUPYTER_PORT="${JUPYTER_PORT:-8888}"
+JUPYTER_LOG="/var/log/pipress/jupyter.log"
+JUPYTER_PIDFILE="/run/pipress_jupyter.pid"
+
 # Service retry settings
 MAX_SERVICE_RETRIES=3
 SERVICE_RETRY_DELAY=3
@@ -82,7 +88,7 @@ while IFS='=' read -r key val; do
     esac
 done < "$CONFIG_FILE"
 
-TOTAL_STEPS=10
+TOTAL_STEPS=11
 CURRENT_STEP=0
 
 print_progress() {
@@ -93,8 +99,10 @@ print_progress() {
         percent=100
     fi
     local bar_len=$((percent / 10))
-    local bar=$(printf '%0.s#' $(seq 1 $bar_len))
-    local spaces=$(printf '%0.s-' $(seq 1 $((10 - bar_len))))
+    local bar
+    bar=$(printf '%0.s#' $(seq 1 $bar_len))
+    local spaces
+    spaces=$(printf '%0.s-' $(seq 1 $((10 - bar_len))))
     tput civis
     printf "\r[%s%s] %3d%% - %s" "$bar" "$spaces" "$percent" "$message"
     sleep 0.5
@@ -220,6 +228,54 @@ start_monitor_with_retries() {
 
     echo -e "${RED}[ERROR]${NC} Monitor failed to start after $MAX_SERVICE_RETRIES attempts. See $LOG_FILE for details."
     return 1
+}
+
+# Start Jupyter notebook/Lab from the dedicated venv, after system services
+start_jupyter() {
+    echo -e "\n${BLUE}[INFO]${NC} Preparing to start Jupyter notebook server..."
+
+    # If the venv doesn't exist, skip quietly (maybe not installed yet)
+    if [ ! -d "$JUPYTER_VENV" ]; then
+        echo -e "${YELLOW}[WARN]${NC} Jupyter venv not found at $JUPYTER_VENV – skipping Jupyter start."
+        return 0
+    fi
+
+    local JUPYTER_BIN="$JUPYTER_VENV/bin/jupyter"
+    if [ ! -x "$JUPYTER_BIN" ]; then
+        echo -e "${YELLOW}[WARN]${NC} Jupyter CLI not found at $JUPYTER_BIN – skipping Jupyter start."
+        return 0
+    fi
+
+    # Ensure log directory exists
+    sudo mkdir -p "$(dirname "$JUPYTER_LOG")"
+    sudo touch "$JUPYTER_LOG"
+    sudo chown "$USER":"$USER" "$JUPYTER_LOG"
+
+    # Ensure run directory exists for PID file
+    sudo mkdir -p "$(dirname "$JUPYTER_PIDFILE")"
+
+    # If already running, don't start another instance
+    if [ -f "$JUPYTER_PIDFILE" ] && kill -0 "$(cat "$JUPYTER_PIDFILE")" 2>/dev/null; then
+        echo -e "${GREEN}[OK]${NC} Jupyter already running with PID $(cat "$JUPYTER_PIDFILE"). Skipping."
+        return 0
+    fi
+
+    print_progress "Starting Jupyter notebook server"
+
+    echo -e "\n${BLUE}[INFO]${NC} Launching Jupyter Lab on port $JUPYTER_PORT..."
+    # NOTE: token/password disabled because this is intended for isolated AP-mode usage.
+    # For production, configure a proper token or password.
+    "$JUPYTER_BIN" lab \
+        --no-browser \
+        --ip=0.0.0.0 \
+        --port="$JUPYTER_PORT" \
+        --NotebookApp.token='' \
+        --NotebookApp.password='' \
+        >> "$JUPYTER_LOG" 2>&1 &
+
+    local JPID=$!
+    echo "$JPID" | sudo tee "$JUPYTER_PIDFILE" >/dev/null
+    echo -e "${GREEN}[OK]${NC} Jupyter started with PID $JPID, logging to $JUPYTER_LOG"
 }
 
 # Ensure uap0 interface exists (and try to create it from wlan0 if missing)
@@ -438,7 +494,6 @@ if [ -z "$AP_IP" ]; then
     fi
 fi
 
-
 # Ensure hostapd and dnsmasq are actually running
 dns_unit="dnsmasq"
 if [ -f "/etc/systemd/system/dnsmasq@.service" ]; then
@@ -467,6 +522,9 @@ ensure_service "apache2" "Apache web server"
 print_progress "Starting Flask monitor"
 start_monitor_with_retries
 
+# Start Jupyter after all core services and monitor are up
+start_jupyter
+
 print_progress "Finalizing setup"
 tput cnorm
 
@@ -480,6 +538,7 @@ echo -e "${GREEN}[SUCCESS]${NC} PiPress setup complete."
 echo "=============================="
 echo "- Web Portal:  http://learning.betabox (http://$AP_IP)"
 echo "- Monitor UI:  http://monitor.betabox (http://$AP_IP:$MONITOR_PORT)"
+echo "- Jupyter:     http://$AP_IP:$JUPYTER_PORT"
 echo "- Logs:        $LOG_FILE"
 echo "=============================="
 
