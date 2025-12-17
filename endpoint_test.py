@@ -100,7 +100,6 @@ def test_monitor_port_listening_or_http(port: int):
     except HTTPError as e:
         assert e.code in (301, 302, 401, 403), f"Unexpected HTTPError {{e.code}} for {{url}}"
     except URLError:
-        # Port is listening; non-HTTP is acceptable.
         pass
 '''
 
@@ -152,7 +151,6 @@ def guess_monitor_port_from_unit_text(unit_text: str) -> Optional[int]:
 def parse_junit(xml_text: str) -> List[dict]:
     root = ET.fromstring(xml_text)
     out: List[dict] = []
-
     suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
 
     for suite in suites:
@@ -224,7 +222,6 @@ def sftp_mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
     remote_dir = remote_dir.replace("\\", "/").rstrip("/")
     if not remote_dir:
         return
-
     parts = remote_dir.split("/")
     path = ""
     for part in parts:
@@ -257,18 +254,9 @@ def pick_writable_remote_path(
 ) -> str:
     desired_path = desired_path.replace("\\", "/")
     desired_dir = posixpath.dirname(desired_path) or "/"
-    # Verify the file exists first
-    _, ls_out, _ = ssh_run(ssh, f"ls -l {shlex.quote(junit_remote)} 2>/dev/null || echo MISSING")
-    self._emit(f"[DEBUG] junit check: {ls_out.strip()}")
 
-    if "MISSING" in ls_out:
-        # Pull the remote log for debugging, then raise
-        _, log_out, _ = ssh_run(ssh, f"tail -n 120 {shlex.quote(log_remote)} 2>/dev/null || true")
-        self._emit("[DEBUG] pytest log tail:\n" + (log_out or "").rstrip())
-        raise RuntimeError(f"JUnit XML not found at {junit_remote}. See log tail above.")
     sftp = ssh.open_sftp()
     try:
-        # Try desired location
         try:
             sftp_mkdir_p(sftp, desired_dir)
             if can_write_dir_sftp(sftp, desired_dir):
@@ -276,7 +264,6 @@ def pick_writable_remote_path(
         except Exception:
             pass
 
-        # Fall back
         sftp_mkdir_p(sftp, fallback_dir)
         return posixpath.join(fallback_dir, f"{int(time.time())}_{filename}")
     finally:
@@ -324,7 +311,6 @@ def build_endpoint_set(ssh: paramiko.SSHClient, root_dir: str) -> Tuple[List[str
 
 def choose_monitor_ports(ssh: paramiko.SSHClient) -> List[int]:
     candidates: List[int] = []
-
     for svc in ("monitor.service", "lms-monitor.service", "lms_monitor.service", "lms.service"):
         _, txt, _ = ssh_run(ssh, f"systemctl cat {shlex.quote(svc)} 2>/dev/null || true")
         if txt.strip():
@@ -419,7 +405,6 @@ class Worker(QThread):
                 raise RuntimeError(f"Remote captive portal dir missing: {self.captive_root}")
             self.progress.emit(18)
 
-            # Repo root may exist but be non-writable; we still check it for pytest run
             self.step.emit("Checking repo root…")
             _, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.repo_root)} && echo OK || echo MISSING")
             if "OK" not in out:
@@ -448,10 +433,7 @@ class Worker(QThread):
             self.progress.emit(55)
 
             self.step.emit("Uploading tests to Pi…")
-
-            desired_remote_test_path = self.remote_test_path.replace("\\", "/").strip()
-            if not desired_remote_test_path:
-                desired_remote_test_path = "/tmp/test_endpoints_generated.py"
+            desired_remote_test_path = self.remote_test_path.replace("\\", "/").strip() or "/tmp/test_endpoints_generated.py"
 
             remote_test_path = pick_writable_remote_path(
                 ssh,
@@ -492,6 +474,7 @@ class Worker(QThread):
                 return
 
             self.step.emit("Running pytest remotely…")
+
             junit_remote = f"/tmp/endpoint_tests_{int(time.time())}.xml"
             log_remote = f"/tmp/endpoint_tests_{int(time.time())}.log"
 
@@ -503,17 +486,28 @@ class Worker(QThread):
                 f"> {shlex.quote(log_remote)} 2>&1; "
                 f"echo __PYTEST_RC=$?"
             )
-
             self._emit(f"[RUN] {cmd}")
-            code, out, err = ssh_run(ssh, cmd)
-            if out.strip():
-                self._emit(out.rstrip())
+
+            _, out, err = ssh_run(ssh, cmd)
             if err.strip():
                 self._emit("[stderr]\n" + err.rstrip())
+            if out.strip():
+                self._emit(out.rstrip())
+
             m = re.search(r"__PYTEST_RC=(\d+)", out)
             rc = int(m.group(1)) if m else 999
             self._emit(f"[RESULT] pytest exit code: {rc}")
-            self.progress.emit(88)
+            self.progress.emit(85)
+
+            self.step.emit("Checking for JUnit XML…")
+            _, ls_out, _ = ssh_run(ssh, f"ls -l {shlex.quote(junit_remote)} 2>/dev/null || echo MISSING")
+            self._emit(f"[DEBUG] junit check: {ls_out.strip()}")
+
+            if "MISSING" in ls_out:
+                _, tail_out, _ = ssh_run(ssh, f"tail -n 120 {shlex.quote(log_remote)} 2>/dev/null || true")
+                if tail_out.strip():
+                    self._emit("[DEBUG] pytest log tail:\n" + tail_out.rstrip())
+                raise RuntimeError(f"JUnit XML not found at {junit_remote}")
 
             self.step.emit("Fetching JUnit XML…")
             sftp = ssh.open_sftp()
@@ -562,9 +556,6 @@ class MainWindow(QMainWindow):
 
         self.captive_root = QLineEdit("/AP_mode_wordpress_launcher/www/captive-portal")
         self.repo_root = QLineEdit("/AP_mode_wordpress_launcher")
-
-        # NOTE: This path may be non-writable depending on your Pi perms.
-        # The tool will auto-fallback to /tmp if needed.
         self.remote_test_path = QLineEdit("/AP_mode_wordpress_launcher/tests/generated/test_endpoints.py")
 
         self.base_url_default = QLineEdit("http://127.0.0.1")
@@ -577,24 +568,18 @@ class MainWindow(QMainWindow):
         grid.addWidget(QLabel("Host"), row, 0); grid.addWidget(self.host, row, 1)
         grid.addWidget(QLabel("User"), row, 2); grid.addWidget(self.user, row, 3)
         grid.addWidget(QLabel("Port"), row, 4); grid.addWidget(self.port, row, 5)
-
         row += 1
         grid.addWidget(QLabel("SSH key path"), row, 0); grid.addWidget(self.key, row, 1, 1, 3)
         grid.addWidget(QLabel("Password"), row, 4); grid.addWidget(self.password, row, 5)
-
         row += 1
         grid.addWidget(QLabel("Captive portal dir"), row, 0); grid.addWidget(self.captive_root, row, 1, 1, 5)
-
         row += 1
         grid.addWidget(QLabel("Repo root"), row, 0); grid.addWidget(self.repo_root, row, 1, 1, 5)
-
         row += 1
         grid.addWidget(QLabel("Remote test file path"), row, 0); grid.addWidget(self.remote_test_path, row, 1, 1, 5)
-
         row += 1
         grid.addWidget(QLabel("CAPTIVE_BASE_URL default"), row, 0); grid.addWidget(self.base_url_default, row, 1, 1, 2)
         grid.addWidget(QLabel("MONITOR_HOST default"), row, 3); grid.addWidget(self.monitor_host_default, row, 4, 1, 2)
-
         row += 1
         grid.addWidget(self.run_pytest, row, 0, 1, 3)
 
@@ -692,10 +677,10 @@ class MainWindow(QMainWindow):
                 tc.get("message", ""),
             )
 
-        status_counts = {}
+        counts = {}
         for tc in tests:
-            status_counts[tc.get("status", "unknown")] = status_counts.get(tc.get("status", "unknown"), 0) + 1
-        self.append_log(f"[SUMMARY] {status_counts}")
+            counts[tc.get("status", "unknown")] = counts.get(tc.get("status", "unknown"), 0) + 1
+        self.append_log(f"[SUMMARY] {counts}")
 
     def on_ok(self) -> None:
         self.btn.setEnabled(True)
