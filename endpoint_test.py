@@ -382,21 +382,27 @@ def choose_monitor_ports(ssh: paramiko.SSHClient) -> List[int]:
 
     return candidates[:12]
 
-def render_test_file(
-    static_eps: List[str],
-    linked_eps: List[str],
+from pathlib import Path
+import json
+
+def render_test_file_from_template(
+    template_path: Path,
+    *,
+    static_eps: list[str],
+    linked_eps: list[str],
+    monitor_ports: list[int],
     base_url_default: str,
     monitor_host_default: str,
-    monitor_ports: List[int],
 ) -> str:
-    if len(linked_eps) > 200:
-        linked_eps = linked_eps[:200]
-    return TEST_TEMPLATE.format(
-        base_url_default=base_url_default,
-        monitor_host_default=monitor_host_default,
-        monitor_ports=repr(monitor_ports),
-        static_endpoints=repr(static_eps),
-        linked_endpoints=repr(linked_eps),
+    tpl = template_path.read_text(encoding="utf-8")
+
+    return (
+        tpl
+        .replace("__STATIC_ENDPOINTS__", repr(static_eps))
+        .replace("__LINKED_ENDPOINTS__", repr(linked_eps))
+        .replace("__MONITOR_PORTS__", repr(monitor_ports))
+        .replace("__BASE_URL__", base_url_default)
+        .replace("__MONITOR_HOST__", monitor_host_default)
     )
 
 # ---------------------------
@@ -467,14 +473,23 @@ class Worker(QThread):
             self._emit(f"[MONITOR] Candidate ports: {monitor_ports}")
             self.progress.emit(45)
 
-            self.step.emit("Generating pytest file…")
-            test_text = render_test_file(
-                static_eps=static_eps,
-                linked_eps=linked_eps,
-                base_url_default=self.base_url_default,
-                monitor_host_default=self.monitor_host_default,
-                monitor_ports=monitor_ports,
-            )
+            # --- NEW: generate tests from an on-disk template file (no .format brace issues) ---
+            self.step.emit("Generating pytest file from template…")
+            try:
+                from pathlib import Path
+                template_path = Path(__file__).resolve().parent / "templates" / "pytest_endpoints_template.py"
+                if not template_path.exists():
+                    raise RuntimeError(f"Missing template file: {template_path}")
+                test_text = render_test_file_from_template(
+                    template_path,
+                    static_eps=static_eps,
+                    linked_eps=linked_eps,
+                    monitor_ports=monitor_ports,
+                    base_url_default=self.base_url_default,
+                    monitor_host_default=self.monitor_host_default,
+                )
+            except Exception as e:
+                raise RuntimeError(f"Template-based generation failed: {e}")
             self.progress.emit(55)
 
             self.step.emit("Uploading tests to Pi…")
@@ -506,11 +521,11 @@ class Worker(QThread):
             if not self.run_pytest:
                 planned = [
                     dict(name="static_endpoints", classname="generated", time="0", status="pending",
-                         message=f"{len(static_eps)} endpoints"),
+                        message=f"{len(static_eps)} endpoints"),
                     dict(name="linked_routes", classname="generated", time="0", status="pending",
-                         message=f"{len(linked_eps)} routes"),
+                        message=f"{len(linked_eps)} routes"),
                     dict(name="monitor_ports", classname="generated", time="0", status="pending",
-                         message=f"{len(monitor_ports)} ports"),
+                        message=f"{len(monitor_ports)} ports"),
                 ]
                 self.tests_ready.emit(planned)
                 self.progress.emit(100)
@@ -523,6 +538,7 @@ class Worker(QThread):
             junit_remote = f"/tmp/endpoint_tests_{int(time.time())}.xml"
             log_remote = f"/tmp/endpoint_tests_{int(time.time())}.log"
 
+            # Ensure pytest exists (auto-install if missing), run, capture rc, and log output deterministically.
             cmd = (
                 f"cd {shlex.quote(self.repo_root)} && "
                 f"python3 -m pip -q show pytest >/dev/null 2>&1 || python3 -m pip install --user -U pytest >/dev/null 2>&1; "
