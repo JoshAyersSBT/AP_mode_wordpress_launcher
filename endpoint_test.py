@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import os
 import socket
+import time
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -56,27 +57,66 @@ BASE_URL = os.environ.get("CAPTIVE_BASE_URL", "{base_url_default}").rstrip("/") 
 MONITOR_HOST = os.environ.get("MONITOR_HOST", "{monitor_host_default}")
 MONITOR_PORTS = {monitor_ports}
 
-def _http_get(path: str, *, timeout: float = 3.5):
+# Latency thresholds (milliseconds). Set to "0" to disable.
+MAX_STATIC_MS = int(os.environ.get("MAX_STATIC_MS", "250"))
+MAX_LINKED_MS = int(os.environ.get("MAX_LINKED_MS", "400"))
+MAX_MONITOR_MS = int(os.environ.get("MAX_MONITOR_MS", "500"))
+
+# Retries to smooth transient AP hiccups
+HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "2"))
+HTTP_TIMEOUT_S = float(os.environ.get("HTTP_TIMEOUT_S", "3.5"))
+
+def _http_get_timed(path: str):
+    """
+    Returns (status, headers, body, elapsed_ms)
+    Retries on transient URLError.
+    """
     url = urljoin(BASE_URL, path.lstrip("/"))
-    req = Request(url, headers={{"User-Agent": "pytest-endpoint-probe"}})
-    with urlopen(req, timeout=timeout) as resp:
-        body = resp.read(4096)
-        return resp.status, dict(resp.headers), body
+    last_exc = None
+
+    for attempt in range(HTTP_RETRIES + 1):
+        t0 = time.perf_counter()
+        try:
+            req = Request(url, headers={"User-Agent": "pytest-endpoint-probe"})
+            with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+                body = resp.read(4096)
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                return resp.status, dict(resp.headers), body, elapsed_ms
+        except HTTPError as e:
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            # HTTPError still counts as a response; surface the code as status
+            return e.code, dict(getattr(e, "headers", {}) or {}), b"", elapsed_ms
+        except URLError as e:
+            last_exc = e
+            if attempt >= HTTP_RETRIES:
+                raise
+            time.sleep(0.08 * (attempt + 1))
+
+    raise last_exc  # pragma: no cover
+
+def _assert_latency(name: str, ms: float, limit_ms: int):
+    if limit_ms <= 0:
+        return
+    assert ms <= float(limit_ms), f"{name} too slow: {ms:.1f}ms > {limit_ms}ms"
 
 @pytest.mark.parametrize("path", {static_endpoints})
-def test_captive_portal_static_endpoints_return_200(path: str):
-    status, headers, body = _http_get(path)
-    assert status == 200, f"Expected 200 for {{path}} but got {{status}}"
+def test_captive_portal_static_endpoints_return_200_and_fast(path: str):
+    status, headers, body, ms = _http_get_timed(path)
+    # Log per-endpoint timing (shows in pytest log)
+    print(f"[LATENCY] static {path} -> {status} in {ms:.1f}ms")
+
+    assert status == 200, f"Expected 200 for {path} but got {status}"
     assert body is not None
+    _assert_latency(f"static {path}", ms, MAX_STATIC_MS)
 
 @pytest.mark.parametrize("path", {linked_endpoints})
-def test_captive_portal_linked_routes_are_reachable(path: str):
-    try:
-        status, headers, body = _http_get(path)
-    except HTTPError as e:
-        assert e.code in (200, 301, 302, 401, 403), f"Unexpected HTTP {{e.code}} for {{path}}"
-        return
-    assert status in (200, 301, 302, 401, 403), f"Unexpected status {{status}} for {{path}}"
+def test_captive_portal_linked_routes_reachable_and_fast(path: str):
+    status, headers, body, ms = _http_get_timed(path)
+    print(f"[LATENCY] linked {path} -> {status} in {ms:.1f}ms")
+
+    # Linked routes may redirect or be auth-gated
+    assert status in (200, 301, 302, 401, 403), f"Unexpected status {status} for {path}"
+    _assert_latency(f"linked {path}", ms, MAX_LINKED_MS)
 
 def _tcp_connectable(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
@@ -86,22 +126,33 @@ def _tcp_connectable(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 @pytest.mark.parametrize("port", MONITOR_PORTS)
-def test_monitor_port_listening_or_http(port: int):
+def test_monitor_responsive(port: int):
     if not _tcp_connectable(MONITOR_HOST, port, timeout=1.2):
-        pytest.skip(f"Monitor not listening on {{MONITOR_HOST}}:{{port}}")
+        pytest.skip(f"Monitor not listening on {MONITOR_HOST}:{port}")
 
-    url = f"http://{{MONITOR_HOST}}:{{port}}/"
-    req = Request(url, headers={{"User-Agent": "pytest-monitor-probe"}})
+    url = f"http://{MONITOR_HOST}:{port}/"
+    # Time a simple GET (if it isn't HTTP, we accept that but still record TCP is open)
+    t0 = time.perf_counter()
     try:
-        with urlopen(req, timeout=3.5) as resp:
-            body = resp.read(4096)
-            assert resp.status in (200, 301, 302, 401, 403), f"Unexpected status {{resp.status}} for {{url}}"
-            assert body is not None
+        req = Request(url, headers={"User-Agent": "pytest-monitor-probe"})
+        with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+            _ = resp.read(2048)
+            ms = (time.perf_counter() - t0) * 1000.0
+            print(f"[LATENCY] monitor {url} -> {resp.status} in {ms:.1f}ms")
+            assert resp.status in (200, 301, 302, 401, 403), f"Unexpected status {resp.status} for {url}"
+            _assert_latency(f"monitor {url}", ms, MAX_MONITOR_MS)
     except HTTPError as e:
-        assert e.code in (301, 302, 401, 403), f"Unexpected HTTPError {{e.code}} for {{url}}"
+        ms = (time.perf_counter() - t0) * 1000.0
+        print(f"[LATENCY] monitor {url} -> HTTPError {e.code} in {ms:.1f}ms")
+        assert e.code in (301, 302, 401, 403), f"Unexpected HTTPError {e.code} for {url}"
+        _assert_latency(f"monitor {url}", ms, MAX_MONITOR_MS)
     except URLError:
-        pass
+        # Non-HTTP service but TCP is listening; treat as responsive.
+        ms = (time.perf_counter() - t0) * 1000.0
+        print(f"[LATENCY] monitor {url} -> non-HTTP (TCP open) in {ms:.1f}ms")
+        _assert_latency(f"monitor tcp {url}", ms, MAX_MONITOR_MS)
 '''
+
 
 def is_asset(path: str) -> bool:
     return os.path.splitext(path.lower())[1] in ASSET_EXTS
