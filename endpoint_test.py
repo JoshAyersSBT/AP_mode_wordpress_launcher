@@ -257,7 +257,15 @@ def pick_writable_remote_path(
 ) -> str:
     desired_path = desired_path.replace("\\", "/")
     desired_dir = posixpath.dirname(desired_path) or "/"
+    # Verify the file exists first
+    _, ls_out, _ = ssh_run(ssh, f"ls -l {shlex.quote(junit_remote)} 2>/dev/null || echo MISSING")
+    self._emit(f"[DEBUG] junit check: {ls_out.strip()}")
 
+    if "MISSING" in ls_out:
+        # Pull the remote log for debugging, then raise
+        _, log_out, _ = ssh_run(ssh, f"tail -n 120 {shlex.quote(log_remote)} 2>/dev/null || true")
+        self._emit("[DEBUG] pytest log tail:\n" + (log_out or "").rstrip())
+        raise RuntimeError(f"JUnit XML not found at {junit_remote}. See log tail above.")
     sftp = ssh.open_sftp()
     try:
         # Try desired location
