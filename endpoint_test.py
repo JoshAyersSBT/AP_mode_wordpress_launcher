@@ -14,13 +14,12 @@ from typing import List, Optional, Set, Tuple
 
 import paramiko
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QPushButton,
-    QTextEdit, QVBoxLayout, QHBoxLayout, QGridLayout, QProgressBar,
-    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QCheckBox
+    QTextEdit, QGridLayout, QProgressBar, QTableWidget, QTableWidgetItem,
+    QHeaderView, QMessageBox, QCheckBox
 )
-
 
 # ---------------------------
 # Discovery + generation logic
@@ -151,18 +150,10 @@ def guess_monitor_port_from_unit_text(unit_text: str) -> Optional[int]:
     return None
 
 def parse_junit(xml_text: str) -> List[dict]:
-    """
-    Returns list of {name, classname, time, status, message}
-    status: pass/fail/skip/error
-    """
     root = ET.fromstring(xml_text)
     out: List[dict] = []
 
-    suites = []
-    if root.tag == "testsuite":
-        suites = [root]
-    else:
-        suites = list(root.findall(".//testsuite"))
+    suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
 
     for suite in suites:
         for tc in suite.findall(".//testcase"):
@@ -193,7 +184,6 @@ def parse_junit(xml_text: str) -> List[dict]:
                 message=(msg or "").strip(),
             ))
     return out
-
 
 # ---------------------------
 # SSH helpers
@@ -231,10 +221,6 @@ def sftp_read_text(sftp: paramiko.SFTPClient, path: str, max_bytes: int = 512_00
     return data.decode("utf-8", errors="replace")
 
 def sftp_mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
-    """
-    Create remote_dir and all parents if needed.
-    Uses SFTP only (no remote shell), and is safe for POSIX paths.
-    """
     remote_dir = remote_dir.replace("\\", "/").rstrip("/")
     if not remote_dir:
         return
@@ -250,6 +236,43 @@ def sftp_mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
             sftp.stat(path)
         except FileNotFoundError:
             sftp.mkdir(path)
+
+def can_write_dir_sftp(sftp: paramiko.SFTPClient, remote_dir: str) -> bool:
+    remote_dir = remote_dir.replace("\\", "/").rstrip("/") or "/"
+    test_path = remote_dir.rstrip("/") + "/.write_test_tmp"
+    try:
+        with sftp.open(test_path, "w") as f:
+            f.write("x")
+        sftp.remove(test_path)
+        return True
+    except Exception:
+        return False
+
+def pick_writable_remote_path(
+    ssh: paramiko.SSHClient,
+    desired_path: str,
+    *,
+    fallback_dir: str = "/tmp",
+    filename: str = "test_endpoints_generated.py",
+) -> str:
+    desired_path = desired_path.replace("\\", "/")
+    desired_dir = posixpath.dirname(desired_path) or "/"
+
+    sftp = ssh.open_sftp()
+    try:
+        # Try desired location
+        try:
+            sftp_mkdir_p(sftp, desired_dir)
+            if can_write_dir_sftp(sftp, desired_dir):
+                return desired_path
+        except Exception:
+            pass
+
+        # Fall back
+        sftp_mkdir_p(sftp, fallback_dir)
+        return posixpath.join(fallback_dir, f"{int(time.time())}_{filename}")
+    finally:
+        sftp.close()
 
 def discover_files(ssh: paramiko.SSHClient, root_dir: str) -> List[str]:
     code, out, err = ssh_run(ssh, f"find {shlex.quote(root_dir)} -type f -print")
@@ -293,6 +316,7 @@ def build_endpoint_set(ssh: paramiko.SSHClient, root_dir: str) -> Tuple[List[str
 
 def choose_monitor_ports(ssh: paramiko.SSHClient) -> List[int]:
     candidates: List[int] = []
+
     for svc in ("monitor.service", "lms-monitor.service", "lms_monitor.service", "lms.service"):
         _, txt, _ = ssh_run(ssh, f"systemctl cat {shlex.quote(svc)} 2>/dev/null || true")
         if txt.strip():
@@ -335,7 +359,6 @@ def render_test_file(
         static_endpoints=repr(static_eps),
         linked_endpoints=repr(linked_eps),
     )
-
 
 # ---------------------------
 # Worker thread
@@ -382,15 +405,15 @@ class Worker(QThread):
             self._emit("[SSH] Connected.")
             self.progress.emit(10)
 
-            # Preflight: ensure dirs exist
             self.step.emit("Checking captive portal directory…")
-            code, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.captive_root)} && echo OK || echo MISSING")
+            _, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.captive_root)} && echo OK || echo MISSING")
             if "OK" not in out:
                 raise RuntimeError(f"Remote captive portal dir missing: {self.captive_root}")
             self.progress.emit(18)
 
+            # Repo root may exist but be non-writable; we still check it for pytest run
             self.step.emit("Checking repo root…")
-            code, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.repo_root)} && echo OK || echo MISSING")
+            _, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.repo_root)} && echo OK || echo MISSING")
             if "OK" not in out:
                 raise RuntimeError(f"Remote repo root missing: {self.repo_root}")
             self.progress.emit(22)
@@ -416,21 +439,27 @@ class Worker(QThread):
             )
             self.progress.emit(55)
 
-            # ---- Upload (FIXED) ----
             self.step.emit("Uploading tests to Pi…")
-            # Normalize possible Windows backslashes from GUI
-            remote_test_path = self.remote_test_path.replace("\\", "/")
+
+            desired_remote_test_path = self.remote_test_path.replace("\\", "/").strip()
+            if not desired_remote_test_path:
+                desired_remote_test_path = "/tmp/test_endpoints_generated.py"
+
+            remote_test_path = pick_writable_remote_path(
+                ssh,
+                desired_remote_test_path,
+                fallback_dir="/tmp",
+                filename="test_endpoints_generated.py",
+            )
             remote_dir = posixpath.dirname(remote_test_path)
 
-            self._emit(f"[DEBUG] remote_test_path={remote_test_path}")
-            self._emit(f"[DEBUG] remote_dir={remote_dir}")
+            self._emit(f"[DEBUG] desired_remote_test_path={desired_remote_test_path}")
+            self._emit(f"[DEBUG] selected_remote_test_path={remote_test_path}")
+            self._emit(f"[DEBUG] selected_remote_dir={remote_dir}")
 
             sftp = ssh.open_sftp()
             try:
-                self._emit(f"[DEBUG] Ensuring remote dir exists via SFTP mkdir -p: {remote_dir}")
                 sftp_mkdir_p(sftp, remote_dir)
-
-                self._emit(f"[DEBUG] Writing remote test file via SFTP: {remote_test_path}")
                 with sftp.open(remote_test_path, "w") as f:
                     f.write(test_text)
             finally:
@@ -441,9 +470,12 @@ class Worker(QThread):
 
             if not self.run_pytest:
                 planned = [
-                    dict(name="static_endpoints", classname="generated", time="0", status="pending", message=f"{len(static_eps)} endpoints"),
-                    dict(name="linked_routes", classname="generated", time="0", status="pending", message=f"{len(linked_eps)} routes"),
-                    dict(name="monitor_ports", classname="generated", time="0", status="pending", message=f"{len(monitor_ports)} ports"),
+                    dict(name="static_endpoints", classname="generated", time="0", status="pending",
+                         message=f"{len(static_eps)} endpoints"),
+                    dict(name="linked_routes", classname="generated", time="0", status="pending",
+                         message=f"{len(linked_eps)} routes"),
+                    dict(name="monitor_ports", classname="generated", time="0", status="pending",
+                         message=f"{len(monitor_ports)} ports"),
                 ]
                 self.tests_ready.emit(planned)
                 self.progress.emit(100)
@@ -460,8 +492,10 @@ class Worker(QThread):
                 f"python3 -m pip -q show pytest >/dev/null 2>&1 || python3 -m pip install --user -U pytest >/dev/null 2>&1; "
                 f"python3 -m pytest -q --junitxml={shlex.quote(junit_remote)} "
                 f"{shlex.quote(remote_test_path)} "
-                f"| tee {shlex.quote(log_remote)}"
+                f"> {shlex.quote(log_remote)} 2>&1; "
+                f"echo __PYTEST_RC=$?"
             )
+
             self._emit(f"[RUN] {cmd}")
             code, out, err = ssh_run(ssh, cmd)
             if out.strip():
@@ -474,11 +508,8 @@ class Worker(QThread):
             self.step.emit("Fetching JUnit XML…")
             sftp = ssh.open_sftp()
             try:
-                try:
-                    with sftp.open(junit_remote, "r") as f:
-                        xml_text = f.read()
-                except Exception as e:
-                    raise RuntimeError(f"Could not read junit xml at {junit_remote}: {e}")
+                with sftp.open(junit_remote, "r") as f:
+                    xml_text = f.read()
             finally:
                 sftp.close()
 
@@ -497,7 +528,6 @@ class Worker(QThread):
             except Exception:
                 pass
 
-
 # ---------------------------
 # GUI
 # ---------------------------
@@ -513,7 +543,6 @@ class MainWindow(QMainWindow):
         grid = QGridLayout()
         root.setLayout(grid)
 
-        # SSH fields
         self.host = QLineEdit("192.168.50.1")
         self.user = QLineEdit("pi")
         self.port = QLineEdit("22")
@@ -521,12 +550,13 @@ class MainWindow(QMainWindow):
         self.password = QLineEdit("")
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # Paths
         self.captive_root = QLineEdit("/AP_mode_wordpress_launcher/www/captive-portal")
         self.repo_root = QLineEdit("/AP_mode_wordpress_launcher")
+
+        # NOTE: This path may be non-writable depending on your Pi perms.
+        # The tool will auto-fallback to /tmp if needed.
         self.remote_test_path = QLineEdit("/AP_mode_wordpress_launcher/tests/generated/test_endpoints.py")
 
-        # Defaults used by tests (when running on Pi)
         self.base_url_default = QLineEdit("http://127.0.0.1")
         self.monitor_host_default = QLineEdit("127.0.0.1")
 
@@ -537,18 +567,24 @@ class MainWindow(QMainWindow):
         grid.addWidget(QLabel("Host"), row, 0); grid.addWidget(self.host, row, 1)
         grid.addWidget(QLabel("User"), row, 2); grid.addWidget(self.user, row, 3)
         grid.addWidget(QLabel("Port"), row, 4); grid.addWidget(self.port, row, 5)
+
         row += 1
         grid.addWidget(QLabel("SSH key path"), row, 0); grid.addWidget(self.key, row, 1, 1, 3)
         grid.addWidget(QLabel("Password"), row, 4); grid.addWidget(self.password, row, 5)
+
         row += 1
         grid.addWidget(QLabel("Captive portal dir"), row, 0); grid.addWidget(self.captive_root, row, 1, 1, 5)
+
         row += 1
         grid.addWidget(QLabel("Repo root"), row, 0); grid.addWidget(self.repo_root, row, 1, 1, 5)
+
         row += 1
         grid.addWidget(QLabel("Remote test file path"), row, 0); grid.addWidget(self.remote_test_path, row, 1, 1, 5)
+
         row += 1
         grid.addWidget(QLabel("CAPTIVE_BASE_URL default"), row, 0); grid.addWidget(self.base_url_default, row, 1, 1, 2)
         grid.addWidget(QLabel("MONITOR_HOST default"), row, 3); grid.addWidget(self.monitor_host_default, row, 4, 1, 2)
+
         row += 1
         grid.addWidget(self.run_pytest, row, 0, 1, 3)
 
@@ -635,7 +671,7 @@ class MainWindow(QMainWindow):
             self.table.setItem(r, 1, QTableWidgetItem(name))
             self.table.setItem(r, 2, QTableWidgetItem(classname))
             self.table.setItem(r, 3, QTableWidgetItem(t))
-            self.table.setItem(r, 4, QTableWidgetItem(msg[:4000]))
+            self.table.setItem(r, 4, QTableWidgetItem((msg or "")[:4000]))
 
         for tc in tests:
             add_row(
@@ -660,14 +696,12 @@ class MainWindow(QMainWindow):
         self.append_log(msg)
         QMessageBox.critical(self, "Error", "Run failed. See log for details.")
 
-
 def main() -> int:
     app = QApplication(sys.argv)
     w = MainWindow()
     w.resize(1200, 800)
     w.show()
     return app.exec()
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
