@@ -502,7 +502,9 @@ class Worker(QThread):
                 self._emit(out.rstrip())
             if err.strip():
                 self._emit("[stderr]\n" + err.rstrip())
-            self._emit(f"[RESULT] pytest exit code: {code}")
+            m = re.search(r"__PYTEST_RC=(\d+)", out)
+            rc = int(m.group(1)) if m else 999
+            self._emit(f"[RESULT] pytest exit code: {rc}")
             self.progress.emit(88)
 
             self.step.emit("Fetching JUnit XML…")
