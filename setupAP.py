@@ -12,6 +12,10 @@ from status import log_info, log_success, log_warn, log_error
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "launch_settings.conf")
 
+# Template directory (Apache vhost, etc.)
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+APACHE_VHOST_TEMPLATE = os.path.join(TEMPLATE_DIR, "apache_captive_vhost.conf.tpl")
+
 
 # Default values
 SSID = "BetaBox1"
@@ -51,6 +55,61 @@ def load_config():
     SSID = f"BetaBox-{suffix}"
     log_info(f"Using derived SSID: {SSID}")
     log_info(f"Using password: {PASSWORD}")
+
+
+def render_template_from_file(path: str, context: dict) -> str:
+    """Load a text template from disk and apply simple {{KEY}} substitutions.
+
+    This intentionally avoids Python f-strings so Apache patterns like %{HTTP_HOST}
+    are never interpreted by Python.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    for k, v in context.items():
+        text = text.replace(f"{{{{{k}}}}}", str(v))
+
+    return text
+
+
+def ensure_default_apache_template_exists():
+    """Create a default Apache vhost template if one is not present."""
+    os.makedirs(TEMPLATE_DIR, exist_ok=True)
+    if os.path.exists(APACHE_VHOST_TEMPLATE):
+        return
+
+    default_tpl = """\
+<VirtualHost *:80>
+    ServerName {{PRIMARY_HOST}}
+    ServerAlias {{PRIMARY_HOST}}
+    ServerAlias *
+
+    DocumentRoot {{DOC_ROOT}}
+
+    RewriteEngine On
+    # 1) Do NOT redirect if user is already on the portal host…
+    RewriteCond %{HTTP_HOST} !^learning\\.betabox$ [NC]
+    # 2) …or if they’re targeting the monitor hostname…
+    RewriteCond %{HTTP_HOST} !^monitor\\.betabox$ [NC]
+    # 3) …or if they’re using a raw IPv4 address (e.g. 192.168.50.1)
+    RewriteCond %{HTTP_HOST} !^[0-9.]+$ [NC]
+    # For anything else, force them into the captive portal.
+    RewriteRule ^/(.*)$ http://learning.betabox/ [R=302,L]
+
+    <Directory {{DOC_ROOT}}>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+        RewriteEngine On
+    </Directory>
+
+    ErrorLog /var/log/apache2/learning_error.log
+    CustomLog /var/log/apache2/learning_access.log combined
+</VirtualHost>
+"""
+
+    with open(APACHE_VHOST_TEMPLATE, "w", encoding="utf-8", newline="\n") as f:
+        f.write(default_tpl)
 
 
 # ---------------- Network Helpers ----------------
@@ -354,42 +413,22 @@ def configure_apache_for_wordpress():
     """
     log_info("Configuring Apache for captive portal content...")
 
-    site_conf = f"""\
-        <VirtualHost *:80>
-            ServerName learning.betabox
-            # Catch *any* host and treat it as the captive portal
-            ServerAlias learning.betabox
-            ServerAlias *
+    # IMPORTANT: load Apache vhost from a template file so Apache tokens like
+    # %{HTTP_HOST} are never parsed by Python string interpolation.
+    ensure_default_apache_template_exists()
 
-            DocumentRoot /AP_mode_wordpress_launcher/www/captive-portal
+    doc_root = "/AP_mode_wordpress_launcher/www/captive-portal"
+    os.makedirs(doc_root, exist_ok=True)
 
-            # Global rewrite rules for captive portal behavior
-            RewriteEngine On
-            # 1) Do NOT redirect if user is already on the portal host…
-            RewriteCond %{HTTP_HOST} !^learning\.betabox$ [NC]
-            # 2) …or if they’re targeting the monitor hostname…
-            RewriteCond %{HTTP_HOST} !^monitor\.betabox$ [NC]
-            # 3) …or if they’re using a raw IPv4 address (e.g. 192.168.50.1)
-            RewriteCond %{HTTP_HOST} !^[0-9.]+$ [NC]
-            # For anything else, force them into the captive portal.
-            RewriteRule ^/(.*)$ http://learning.betabox/ [R=302,L]
-
-            <Directory /AP_mode_wordpress_launcher/www/captive-portal>
-                Options Indexes FollowSymLinks
-                AllowOverride All
-                Require all granted
-                RewriteEngine On
-            </Directory>
-
-            ErrorLog /var/log/apache2/learning_error.log
-            CustomLog /var/log/apache2/learning_access.log combined
-        </VirtualHost>
-
-            """
+    site_conf = render_template_from_file(
+        APACHE_VHOST_TEMPLATE,
+        {
+            "PRIMARY_HOST": "learning.betabox",
+            "DOC_ROOT": doc_root,
+        },
+    )
 
     apache_site_path = "/etc/apache2/sites-available/pipress.conf"
-    os.makedirs("/AP_mode_wordpress_launcher/www/captive-portal/", exist_ok=True)
-
     with open(apache_site_path, "w", newline="\n") as f:
         f.write(site_conf)
 
@@ -397,7 +436,9 @@ def configure_apache_for_wordpress():
     run("a2enmod rewrite", check=False)
     run("a2ensite pipress.conf", check=False)
     run("a2dissite 000-default.conf", check=False)
-    # Restart Apache to pick up changes
+
+    # Validate Apache config before restart (hard-fail if bad)
+    run("apachectl configtest", check=True)
     run("systemctl restart apache2", check=True)
     log_success("Apache virtual host configured for learning.betabox.")
 
