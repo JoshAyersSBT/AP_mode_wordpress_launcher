@@ -150,6 +150,50 @@ def guess_monitor_port_from_unit_text(unit_text: str) -> Optional[int]:
         return int(m.group(1))
     return None
 
+def parse_junit(xml_text: str) -> List[dict]:
+    """
+    Returns list of {name, classname, time, status, message}
+    status: pass/fail/skip/error
+    """
+    root = ET.fromstring(xml_text)
+    out: List[dict] = []
+
+    suites = []
+    if root.tag == "testsuite":
+        suites = [root]
+    else:
+        suites = list(root.findall(".//testsuite"))
+
+    for suite in suites:
+        for tc in suite.findall(".//testcase"):
+            name = tc.attrib.get("name", "")
+            classname = tc.attrib.get("classname", "")
+            t = tc.attrib.get("time", "0")
+            status = "pass"
+            msg = ""
+
+            if tc.find("skipped") is not None:
+                status = "skip"
+                node = tc.find("skipped")
+                msg = (node.attrib.get("message", "") if node is not None else "") or (node.text or "")
+            elif tc.find("failure") is not None:
+                status = "fail"
+                node = tc.find("failure")
+                msg = (node.attrib.get("message", "") if node is not None else "") or (node.text or "")
+            elif tc.find("error") is not None:
+                status = "error"
+                node = tc.find("error")
+                msg = (node.attrib.get("message", "") if node is not None else "") or (node.text or "")
+
+            out.append(dict(
+                name=name,
+                classname=classname,
+                time=t,
+                status=status,
+                message=(msg or "").strip(),
+            ))
+    return out
+
 
 # ---------------------------
 # SSH helpers
@@ -185,6 +229,27 @@ def sftp_read_text(sftp: paramiko.SFTPClient, path: str, max_bytes: int = 512_00
     with sftp.open(path, "rb") as f:
         data = f.read(max_bytes)
     return data.decode("utf-8", errors="replace")
+
+def sftp_mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
+    """
+    Create remote_dir and all parents if needed.
+    Uses SFTP only (no remote shell), and is safe for POSIX paths.
+    """
+    remote_dir = remote_dir.replace("\\", "/").rstrip("/")
+    if not remote_dir:
+        return
+
+    parts = remote_dir.split("/")
+    path = ""
+    for part in parts:
+        if part == "":
+            path = "/"
+            continue
+        path = ("/" + part) if path == "/" else (path + "/" + part)
+        try:
+            sftp.stat(path)
+        except FileNotFoundError:
+            sftp.mkdir(path)
 
 def discover_files(ssh: paramiko.SSHClient, root_dir: str) -> List[str]:
     code, out, err = ssh_run(ssh, f"find {shlex.quote(root_dir)} -type f -print")
@@ -243,7 +308,10 @@ def choose_monitor_ports(ssh: paramiko.SSHClient) -> List[int]:
     ports: Set[int] = set()
     for line in out.splitlines():
         for m in LISTEN_RE.finditer(line):
-            ports.add(int(m.group(1)))
+            try:
+                ports.add(int(m.group(1)))
+            except Exception:
+                pass
 
     for p in sorted(ports):
         if p >= 1024 and p not in candidates:
@@ -268,50 +336,6 @@ def render_test_file(
         linked_endpoints=repr(linked_eps),
     )
 
-def parse_junit(xml_text: str) -> List[dict]:
-    """
-    Returns list of {name, classname, time, status, message}
-    status: pass/fail/skip/error
-    """
-    root = ET.fromstring(xml_text)
-    out: List[dict] = []
-
-    # Could be <testsuite> or <testsuites>
-    suites = []
-    if root.tag == "testsuite":
-        suites = [root]
-    else:
-        suites = list(root.findall(".//testsuite"))
-
-    for suite in suites:
-        for tc in suite.findall(".//testcase"):
-            name = tc.attrib.get("name", "")
-            classname = tc.attrib.get("classname", "")
-            t = tc.attrib.get("time", "0")
-            status = "pass"
-            msg = ""
-
-            if tc.find("skipped") is not None:
-                status = "skip"
-                msg = tc.find("skipped").attrib.get("message", "") if tc.find("skipped") is not None else ""
-            elif tc.find("failure") is not None:
-                status = "fail"
-                node = tc.find("failure")
-                msg = (node.attrib.get("message", "") if node is not None else "") or (node.text or "")
-            elif tc.find("error") is not None:
-                status = "error"
-                node = tc.find("error")
-                msg = (node.attrib.get("message", "") if node is not None else "") or (node.text or "")
-
-            out.append(dict(
-                name=name,
-                classname=classname,
-                time=t,
-                status=status,
-                message=(msg or "").strip(),
-            ))
-    return out
-
 
 # ---------------------------
 # Worker thread
@@ -321,7 +345,7 @@ class Worker(QThread):
     log = pyqtSignal(str)
     progress = pyqtSignal(int)
     step = pyqtSignal(str)
-    tests_ready = pyqtSignal(list)      # list of dicts for table
+    tests_ready = pyqtSignal(list)
     finished_ok = pyqtSignal()
     finished_err = pyqtSignal(str)
 
@@ -358,12 +382,18 @@ class Worker(QThread):
             self._emit("[SSH] Connected.")
             self.progress.emit(10)
 
-            # Preflight
+            # Preflight: ensure dirs exist
             self.step.emit("Checking captive portal directory…")
             code, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.captive_root)} && echo OK || echo MISSING")
             if "OK" not in out:
                 raise RuntimeError(f"Remote captive portal dir missing: {self.captive_root}")
             self.progress.emit(18)
+
+            self.step.emit("Checking repo root…")
+            code, out, _ = ssh_run(ssh, f"test -d {shlex.quote(self.repo_root)} && echo OK || echo MISSING")
+            if "OK" not in out:
+                raise RuntimeError(f"Remote repo root missing: {self.repo_root}")
+            self.progress.emit(22)
 
             self.step.emit("Discovering endpoints…")
             static_eps, linked_eps = build_endpoint_set(ssh, self.captive_root)
@@ -386,26 +416,35 @@ class Worker(QThread):
             )
             self.progress.emit(55)
 
+            # ---- Upload (FIXED) ----
             self.step.emit("Uploading tests to Pi…")
-            # ensure tests dir exists
-            remote_dir = posixpath.dirname(self.remote_test_path)
-            ssh_run(ssh, f"mkdir -p {shlex.quote(remote_dir)}")
+            # Normalize possible Windows backslashes from GUI
+            remote_test_path = self.remote_test_path.replace("\\", "/")
+            remote_dir = posixpath.dirname(remote_test_path)
+
+            self._emit(f"[DEBUG] remote_test_path={remote_test_path}")
+            self._emit(f"[DEBUG] remote_dir={remote_dir}")
+
             sftp = ssh.open_sftp()
             try:
-                with sftp.open(self.remote_test_path, "w") as f:
+                self._emit(f"[DEBUG] Ensuring remote dir exists via SFTP mkdir -p: {remote_dir}")
+                sftp_mkdir_p(sftp, remote_dir)
+
+                self._emit(f"[DEBUG] Writing remote test file via SFTP: {remote_test_path}")
+                with sftp.open(remote_test_path, "w") as f:
                     f.write(test_text)
             finally:
                 sftp.close()
-            self._emit(f"[UPLOAD] Wrote: {self.remote_test_path}")
+
+            self._emit(f"[UPLOAD] Wrote: {remote_test_path}")
             self.progress.emit(70)
 
             if not self.run_pytest:
-                # Populate “planned” test list as pending
-                planned = []
-                # We don’t know param expansions count, but we can show high-level “groups”
-                planned.append(dict(name="static_endpoints", classname="generated", time="0", status="pending", message=f"{len(static_eps)} endpoints"))
-                planned.append(dict(name="linked_routes", classname="generated", time="0", status="pending", message=f"{len(linked_eps)} routes"))
-                planned.append(dict(name="monitor_ports", classname="generated", time="0", status="pending", message=f"{len(monitor_ports)} ports"))
+                planned = [
+                    dict(name="static_endpoints", classname="generated", time="0", status="pending", message=f"{len(static_eps)} endpoints"),
+                    dict(name="linked_routes", classname="generated", time="0", status="pending", message=f"{len(linked_eps)} routes"),
+                    dict(name="monitor_ports", classname="generated", time="0", status="pending", message=f"{len(monitor_ports)} ports"),
+                ]
                 self.tests_ready.emit(planned)
                 self.progress.emit(100)
                 self.step.emit("Done (generated only).")
@@ -415,16 +454,18 @@ class Worker(QThread):
             self.step.emit("Running pytest remotely…")
             junit_remote = f"/tmp/endpoint_tests_{int(time.time())}.xml"
             log_remote = f"/tmp/endpoint_tests_{int(time.time())}.log"
+
             cmd = (
                 f"cd {shlex.quote(self.repo_root)} && "
                 f"python3 -m pip -q show pytest >/dev/null 2>&1 || python3 -m pip install --user -U pytest >/dev/null 2>&1; "
                 f"python3 -m pytest -q --junitxml={shlex.quote(junit_remote)} "
-                f"{shlex.quote(self.remote_test_path)} "
+                f"{shlex.quote(remote_test_path)} "
                 f"| tee {shlex.quote(log_remote)}"
             )
             self._emit(f"[RUN] {cmd}")
             code, out, err = ssh_run(ssh, cmd)
-            self._emit(out.rstrip())
+            if out.strip():
+                self._emit(out.rstrip())
             if err.strip():
                 self._emit("[stderr]\n" + err.rstrip())
             self._emit(f"[RESULT] pytest exit code: {code}")
@@ -433,7 +474,6 @@ class Worker(QThread):
             self.step.emit("Fetching JUnit XML…")
             sftp = ssh.open_sftp()
             try:
-                xml_text = ""
                 try:
                     with sftp.open(junit_remote, "r") as f:
                         xml_text = f.read()
@@ -449,8 +489,7 @@ class Worker(QThread):
             self.finished_ok.emit()
 
         except Exception:
-            msg = traceback.format_exc()
-            self.finished_err.emit(msg)
+            self.finished_err.emit(traceback.format_exc())
         finally:
             try:
                 if ssh:
@@ -546,10 +585,16 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Busy", "A run is already in progress.")
             return
 
+        try:
+            port = int(self.port.text().strip() or "22")
+        except ValueError:
+            QMessageBox.critical(self, "Invalid port", "Port must be an integer.")
+            return
+
         cfg = SSHConfig(
             host=self.host.text().strip(),
             user=self.user.text().strip(),
-            port=int(self.port.text().strip() or "22"),
+            port=port,
             key_path=self.key.text(),
             password=self.password.text(),
         )
@@ -601,7 +646,6 @@ class MainWindow(QMainWindow):
                 tc.get("message", ""),
             )
 
-        # quick summary in log
         status_counts = {}
         for tc in tests:
             status_counts[tc.get("status", "unknown")] = status_counts.get(tc.get("status", "unknown"), 0) + 1
