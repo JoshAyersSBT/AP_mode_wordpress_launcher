@@ -77,15 +77,14 @@ def _http_get_timed(path: str):
     for attempt in range(HTTP_RETRIES + 1):
         t0 = time.perf_counter()
         try:
-            req = Request(url, headers={"User-Agent": "pytest-endpoint-probe"})
+            req = Request(url, headers={{{{"User-Agent": "pytest-endpoint-probe"}}}})
             with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
                 body = resp.read(4096)
                 elapsed_ms = (time.perf_counter() - t0) * 1000.0
                 return resp.status, dict(resp.headers), body, elapsed_ms
         except HTTPError as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
-            # HTTPError still counts as a response; surface the code as status
-            return e.code, dict(getattr(e, "headers", {}) or {}), b"", elapsed_ms
+            return e.code, dict(getattr(e, "headers", {{{{}}}}) or {{{{}}}}), b"", elapsed_ms
         except URLError as e:
             last_exc = e
             if attempt >= HTTP_RETRIES:
@@ -97,26 +96,24 @@ def _http_get_timed(path: str):
 def _assert_latency(name: str, ms: float, limit_ms: int):
     if limit_ms <= 0:
         return
-    assert ms <= float(limit_ms), f"{name} too slow: {ms:.1f}ms > {limit_ms}ms"
+    assert ms <= float(limit_ms), f"{{name}} too slow: {{ms:.1f}}ms > {{limit_ms}}ms"
 
 @pytest.mark.parametrize("path", {static_endpoints})
 def test_captive_portal_static_endpoints_return_200_and_fast(path: str):
     status, headers, body, ms = _http_get_timed(path)
-    # Log per-endpoint timing (shows in pytest log)
-    print(f"[LATENCY] static {path} -> {status} in {ms:.1f}ms")
+    print(f"[LATENCY] static {{path}} -> {{status}} in {{ms:.1f}}ms")
 
-    assert status == 200, f"Expected 200 for {path} but got {status}"
+    assert status == 200, f"Expected 200 for {{path}} but got {{status}}"
     assert body is not None
-    _assert_latency(f"static {path}", ms, MAX_STATIC_MS)
+    _assert_latency(f"static {{path}}", ms, MAX_STATIC_MS)
 
 @pytest.mark.parametrize("path", {linked_endpoints})
 def test_captive_portal_linked_routes_reachable_and_fast(path: str):
     status, headers, body, ms = _http_get_timed(path)
-    print(f"[LATENCY] linked {path} -> {status} in {ms:.1f}ms")
+    print(f"[LATENCY] linked {{path}} -> {{status}} in {{ms:.1f}}ms")
 
-    # Linked routes may redirect or be auth-gated
-    assert status in (200, 301, 302, 401, 403), f"Unexpected status {status} for {path}"
-    _assert_latency(f"linked {path}", ms, MAX_LINKED_MS)
+    assert status in (200, 301, 302, 401, 403), f"Unexpected status {{status}} for {{path}}"
+    _assert_latency(f"linked {{path}}", ms, MAX_LINKED_MS)
 
 def _tcp_connectable(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
@@ -128,31 +125,28 @@ def _tcp_connectable(host: str, port: int, timeout: float = 1.0) -> bool:
 @pytest.mark.parametrize("port", MONITOR_PORTS)
 def test_monitor_responsive(port: int):
     if not _tcp_connectable(MONITOR_HOST, port, timeout=1.2):
-        pytest.skip(f"Monitor not listening on {MONITOR_HOST}:{port}")
+        pytest.skip(f"Monitor not listening on {{MONITOR_HOST}}:{{port}}")
 
-    url = f"http://{MONITOR_HOST}:{port}/"
-    # Time a simple GET (if it isn't HTTP, we accept that but still record TCP is open)
+    url = f"http://{{MONITOR_HOST}}:{{port}}/"
     t0 = time.perf_counter()
     try:
-        req = Request(url, headers={"User-Agent": "pytest-monitor-probe"})
+        req = Request(url, headers={{{{"User-Agent": "pytest-monitor-probe"}}}})
         with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
             _ = resp.read(2048)
             ms = (time.perf_counter() - t0) * 1000.0
-            print(f"[LATENCY] monitor {url} -> {resp.status} in {ms:.1f}ms")
-            assert resp.status in (200, 301, 302, 401, 403), f"Unexpected status {resp.status} for {url}"
-            _assert_latency(f"monitor {url}", ms, MAX_MONITOR_MS)
+            print(f"[LATENCY] monitor {{url}} -> {{resp.status}} in {{ms:.1f}}ms")
+            assert resp.status in (200, 301, 302, 401, 403), f"Unexpected status {{resp.status}} for {{url}}"
+            _assert_latency(f"monitor {{url}}", ms, MAX_MONITOR_MS)
     except HTTPError as e:
         ms = (time.perf_counter() - t0) * 1000.0
-        print(f"[LATENCY] monitor {url} -> HTTPError {e.code} in {ms:.1f}ms")
-        assert e.code in (301, 302, 401, 403), f"Unexpected HTTPError {e.code} for {url}"
-        _assert_latency(f"monitor {url}", ms, MAX_MONITOR_MS)
+        print(f"[LATENCY] monitor {{url}} -> HTTPError {{e.code}} in {{ms:.1f}}ms")
+        assert e.code in (301, 302, 401, 403), f"Unexpected HTTPError {{e.code}} for {{url}}"
+        _assert_latency(f"monitor {{url}}", ms, MAX_MONITOR_MS)
     except URLError:
-        # Non-HTTP service but TCP is listening; treat as responsive.
         ms = (time.perf_counter() - t0) * 1000.0
-        print(f"[LATENCY] monitor {url} -> non-HTTP (TCP open) in {ms:.1f}ms")
-        _assert_latency(f"monitor tcp {url}", ms, MAX_MONITOR_MS)
+        print(f"[LATENCY] monitor {{url}} -> non-HTTP (TCP open) in {{ms:.1f}}ms")
+        _assert_latency(f"monitor tcp {{url}}", ms, MAX_MONITOR_MS)
 '''
-
 
 def is_asset(path: str) -> bool:
     return os.path.splitext(path.lower())[1] in ASSET_EXTS
